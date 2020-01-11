@@ -1,0 +1,47 @@
+// Copyright 2010 The Android Open Source Project
+
+// copy smbd to /system/bin/
+// ======================================
+cc_prebuilt_binary {
+    name: "smbd",
+    target: {
+        android_arm: {
+            srcs: ["bin/smbd"],
+        },
+    },
+    compile_multilib: "32",
+    strip: {
+        keep_symbols: true,
+    },
+    init_rc: ["samba.rc"],
+}
+
+// copy nmbd to /system/bin/
+// ======================================
+cc_prebuilt_binary {
+    name: "nmbd",
+    target: {
+        android_arm: {
+            srcs: ["bin/nmbd"],
+        },
+    },
+    compile_multilib: "32",
+    strip: {
+        keep_symbols: true,
+    },
+}
+
+// copy smbpasswd to /system/bin/
+// ======================================
+cc_prebuilt_binary {
+    name: "smbpasswd",
+    target: {
+        android_arm: {
+            srcs: ["bin/smbpasswd"],
+        },
+    },
+    compile_multilib: "32",
+    strip: {
+        keep_symbols: true,
+    },
+}

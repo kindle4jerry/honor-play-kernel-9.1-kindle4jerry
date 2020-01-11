@@ -1,0 +1,50 @@
+.\" Copyright (C) 2015 Huawei Ltd.
+.\"
+.TH TUNE.F2FS 8
+.SH NAME
+tune.f2fs \- change the parameters of f2fs
+.SH SYNOPSIS
+.B tune.f2fs
+[
+.B \-d
+.I debugging-level
+]
+[
+.B \-O
+.I features to change
+]
+.I device
+.SH DESCRIPTION
+.B tune.f2fs
+is used to change the parameters of an f2fs file system (usually in a disk partition).
+\fIdevice\fP is the special file corresponding to the device (e.g.
+\fI/dev/sdXX\fP).
+
+Current version only supports adding and removing 'encrypt' feature.
+
+.PP
+The exit code returned by
+.B tune.f2fs
+is 0 on success and -1 on failure.
+.SH OPTIONS
+.TP
+.BI \-d " debug-level"
+Specify the level of debugging options.
+The default number is 0, which shows basic debugging messages.
+.TP
+.BI \-O " features"
+Specify the features to add or remove. Currently only support 'encrypt' feature.
+.TP
+.SH AUTHOR
+This version of
+.B tune.f2fs
+has been written by Junling Zheng <zhengjunling@huawei.com>.
+.SH AVAILABILITY
+.B tune.f2fs
+is available from http://10.141.105.139/platform/external/f2fs-tools.git.
+.SH SEE ALSO
+.BR mkfs.f2fs(8),
+.BR fsck.f2fs(8),
+.BR dump.f2fs(8),
+.BR defrag.f2fs(8),
+.BR sload.f2fs(8).
