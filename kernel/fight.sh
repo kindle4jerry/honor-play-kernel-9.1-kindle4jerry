@@ -22,7 +22,7 @@ make ARCH=arm64 O=../out merge_kirin970_defconfig
 #这个-j的参数可以自己选择，据不可靠消息表明可以设置为cpu线程数的1-2倍
 #ps我可是试过j256的勇士，linux用户界面都给我卡掉了
 
-make ARCH=arm64 O=../out -j128
+make ARCH=arm64 O=../out -j32
 
 #最终输出 Kernel 的位置: out/arch/arm64/boot/Image.gz
 #然后把Image.gz送去打包，位置/kernel/tool
