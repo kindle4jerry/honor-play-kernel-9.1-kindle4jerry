@@ -26,7 +26,7 @@ make ARCH=arm64 O=../out merge_kirin970_defconfig
 #pps我4c8t初次编译用的多少忘了，但是以后编译基本都是用的80那么多
 #ppps我个人推荐不要用cpu线程1-2倍(时间成本高)，我推荐初次编译在3-4倍左右，菊花这个内核make玄学的很，或许和常规的make -j的配置有所不同...自己把握把
 
-make ARCH=arm64 O=../out -j32
+make ARCH=arm64 O=../out -j128
 
 #最终输出 Kernel 的位置: out/arch/arm64/boot/Image.gz
 #然后把Image.gz送去打包，位置/kernel/tool
