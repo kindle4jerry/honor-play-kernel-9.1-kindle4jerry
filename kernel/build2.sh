@@ -33,4 +33,4 @@ make O=../out -j128
 
 #最终输出 Kernel 的位置: out/arch/arm64/boot/Image.gz
 #然后把Image.gz送去打包，位置/kernel/tool
-#打包那里有mk.sh mknoselinux.sh用于打包，打包前去看看注释改参数
+#打包那里有mk.sh mk1.sh用于打包，打包前去看看注释改参数
