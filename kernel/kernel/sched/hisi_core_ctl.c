@@ -27,10 +27,6 @@
 #include <linux/sched/rt.h>
 #include <linux/capability.h>
 #include <linux/hisi/hisi_core_ctl.h>
-#include <linux/version.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0))
-#include <uapi/linux/sched/types.h>
-#endif
 
 #include <trace/events/sched.h>
 
@@ -61,7 +57,6 @@ struct cluster_data {
 	unsigned int max_nrrun;
 	unsigned int last_max_nrrun;
 	cpumask_t cpu_mask;
-	s64 boost_ts;
 	s64 need_ts;
 	spinlock_t pending_lock;
 	struct task_struct *core_ctl_thread;
@@ -110,8 +105,7 @@ static void apply_need(struct cluster_data *state, bool bypass_time_limit);
 static void wake_up_core_ctl_thread(struct cluster_data *state);
 static unsigned int get_active_cpu_count(const struct cluster_data *cluster);
 static void update_isolated_time(struct cpu_data *cpu);
-static void __core_ctl_set_boost(struct cluster_data *cluster,
-				 unsigned int timeout);
+static void __core_ctl_set_boost(struct cluster_data *cluster);
 
 
 /* ========================= sysfs interface =========================== */
@@ -468,7 +462,8 @@ static ssize_t store_boost(struct cluster_data *state,
 	if (sscanf(buf, "%u\n", &val) != 1)/* unsafe_function_ignore: sscanf */
 		return -EINVAL;
 
-	__core_ctl_set_boost(state, val);
+	if (1 == val)
+		__core_ctl_set_boost(state);
 
 	return count;
 }
@@ -810,12 +805,7 @@ int update_misfit_task(void)
 	list_for_each_entry(cluster, &cluster_list, cluster_node) {
 		misfits = 0;
 		for_each_cpu(cpu, &cluster->cpu_mask) {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0))
-			if (cpu_rq(cpu)->misfit_task_load)
-#else
-			if (cpu_rq(cpu)->misfit_task)
-#endif
-				misfits++;
+			misfits += !!cpu_rq(cpu)->misfit_task;/*lint !e514*/
 		}
 
 		if (cluster->cluster_node.prev != &cluster_list) {
@@ -888,17 +878,10 @@ static bool eval_need(struct cluster_data *cluster, bool bypass_time_limit)
 	spin_lock_irqsave(&state_lock, flags);
 
 	cluster->active_cpus = get_active_cpu_count(cluster);
-	now = ktime_to_ms(ktime_get());
 
-	if (!cluster->enable) {
-		new_need = cluster->num_cpus;
-	} else if (cluster->boost) {
+	if (cluster->boost || !cluster->enable) {
 		new_need = cluster->max_cpus;
-		elapsed = now - cluster->boost_ts;
-		elapsed = clamp(elapsed, 0LL, (s64)cluster->boost);/*lint !e666*/
-		cluster->boost -= elapsed;
-		cluster->boost_ts = now;
-		elapsed = 0;
+		cluster->boost = 0;
 	} else {
 		list_for_each_entry(c, &cluster->lru, sib) {
 			if (walt_cpu_high_irqload(c->cpu) ||
@@ -910,10 +893,11 @@ static bool eval_need(struct cluster_data *cluster, bool bypass_time_limit)
 		}
 		new_need = apply_task_need(cluster, busy_cpus);
 	}
-
 	new_need = apply_limits(cluster, new_need);
 	need_flag = adjustment_possible(cluster, new_need);
+
 	last_need = cluster->need_cpus;
+	now = ktime_to_ms(ktime_get());
 
 	if (new_need >= cluster->active_cpus || bypass_time_limit) {
 		ret = 1;
@@ -955,6 +939,7 @@ static void core_ctl_update_busy(int cpu, unsigned int load, bool check_load)
 	struct cluster_data *cluster = c->cluster;
 	bool old_is_busy = c->is_busy;
 	unsigned int old_load;
+	int ret;
 
 	if (!cluster)
 		return;
@@ -969,7 +954,9 @@ static void core_ctl_update_busy(int cpu, unsigned int load, bool check_load)
 	    cpumask_next(cpu, &cluster->cpu_mask) < nr_cpu_ids)/*lint !e574*/
 		return;
 
-	if (check_load && old_load == load)
+	ret = update_running_avg();
+
+	if (check_load && old_load == load && ret)
 		return;
 
 	apply_need(cluster, false);
@@ -990,8 +977,7 @@ static void wake_up_core_ctl_thread(struct cluster_data *cluster)
 	wake_up_process(cluster->core_ctl_thread);
 }
 
-static void __core_ctl_set_boost(struct cluster_data *cluster,
-				 unsigned int timeout)
+static void __core_ctl_set_boost(struct cluster_data *cluster)
 {
 	unsigned long flags;
 
@@ -1003,11 +989,7 @@ static void __core_ctl_set_boost(struct cluster_data *cluster,
 	if (cluster == NULL)
 		cluster = list_first_entry(&cluster_list,
 					  struct cluster_data, cluster_node);
-
-	if (timeout > cluster->boost || timeout == 0) {
-		cluster->boost = timeout;
-		cluster->boost_ts = ktime_to_ms(ktime_get());
-	}
+	cluster->boost = 1;
 
 	spin_unlock_irqrestore(&state_lock, flags);
 
@@ -1016,9 +998,9 @@ static void __core_ctl_set_boost(struct cluster_data *cluster,
 	trace_core_ctl_set_boost(cluster->boost);
 }
 
-void core_ctl_set_boost(unsigned int timeout)
+void core_ctl_set_boost(void)
 {
-	__core_ctl_set_boost(NULL, timeout);
+	__core_ctl_set_boost(NULL);
 }
 EXPORT_SYMBOL(core_ctl_set_boost);
 
@@ -1514,7 +1496,7 @@ static struct notifier_block cpufreq_gov_nb = {
 
 static int __init core_ctl_init(void)
 {
-	int cpu, ret;
+	int cpu;
 
 	if (should_skip(cpu_possible_mask))
 		return 0;
@@ -1532,6 +1514,8 @@ static int __init core_ctl_init(void)
 
 	cpu_maps_update_begin();
 	for_each_online_cpu(cpu) {
+		int ret;
+
 		ret = cluster_init(topology_core_cpumask(cpu));
 		if (ret)
 			pr_err("create core ctl group%d failed: %d\n",

@@ -129,29 +129,6 @@ static int call_cpuidle(struct cpuidle_driver *drv, struct cpuidle_device *dev,
  * set, and it returns with polling set.  If it ever stops polling, it
  * must clear the polling bit.
  */
-#ifdef CONFIG_HISI_DPM_PLATFORM_VENUS
-static DEFINE_PER_CPU(int, record_idle_next_state);
-
-int get_recorded_next_state(void)
-{
-	int a = 255;
-
-	a = get_cpu_var(record_idle_next_state);
-	put_cpu_var(record_idle_next_state);
-
-	return a;
-}
-
-void print_recorded_next_state(void)
-{
-	int i;
-	for(i=0;i<8;i++)
-	{
-		pr_info("cpu%d's next_state=%d\n", i, per_cpu(record_idle_next_state, i));
-	}
-}
-#endif
-
 static void cpuidle_idle_call(void)
 {
 	struct cpuidle_device *dev = cpuidle_get_device();
@@ -202,10 +179,6 @@ static void cpuidle_idle_call(void)
 		 * Ask the cpuidle framework to choose a convenient idle state.
 		 */
 		next_state = cpuidle_select(drv, dev);
-#ifdef CONFIG_HISI_DPM_PLATFORM_VENUS
-		get_cpu_var(record_idle_next_state) = next_state;
-		put_cpu_var(record_idle_next_state);
-#endif
 		entered_state = call_cpuidle(drv, dev, next_state);
 		/*
 		 * Give the governor an opportunity to reflect on the outcome

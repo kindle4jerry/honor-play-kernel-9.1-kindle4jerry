@@ -106,10 +106,6 @@
 #ifdef CONFIG_HW_VIP_THREAD
 #include <chipset_common/hwcfs/hwcfs_common.h>
 #endif
-#ifdef CONFIG_HW_QOS_THREAD
-#include <chipset_common/hwqos/hwqos_common.h>
-#include <chipset_common/hwqos/hwqos_fork.h>
-#endif
 
 #ifdef CONFIG_HISI_CPU_ISOLATION
 #include "hisi_cpuiso.c"
@@ -185,17 +181,12 @@ void migrate_ed_task(struct task_struct *p,
 		return;
 
 	src_rq->ed_task = NULL;
-
-#ifdef CONFIG_HISI_ED_TASK_RESET_AT_UPMIGRATION
+	/* For ed task, reset last_wake_ts if task migrate to faster cpu */
 	if (capacity_orig_of(src_cpu) < capacity_orig_of(dest_cpu)) {
-		/* For ed task, reset last_wake_ts if task migrate to faster cpu */
 		p->last_wake_ts = walt_ktime_clock();
 		p->last_wake_wait_sum = 0;
 		sugov_mark_util_change(src_cpu, CLEAR_ED_TASK);
 	} else if (capacity_orig_of(src_cpu) > capacity_orig_of(dest_cpu)) {
-#else
-	if (capacity_orig_of(src_cpu) != capacity_orig_of(dest_cpu)) {
-#endif
 		if (!dest_rq->ed_task) {
 			dest_rq->ed_task = p;
 			sugov_mark_util_change(dest_cpu, ADD_ED_TASK);
@@ -2250,11 +2241,7 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 	int cpu, src_cpu, success = 0;
 #ifdef CONFIG_SMP
 	struct rq *rq;
-	u64 wallclock = 0;
-#endif
-#ifdef CONFIG_HISI_EAS_SCHED
-	bool boosted = 0;
-	bool prefer_idle = 0;
+	u64 wallclock;
 #endif
 
 	/*
@@ -2331,10 +2318,12 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 
 #ifdef CONFIG_HISI_EAS_SCHED
 #ifdef CONFIG_CGROUP_SCHEDTUNE
-	boosted = schedtune_task_boost(p) > 0;
-	prefer_idle = schedtune_prefer_idle(p) > 0;
+	bool boosted = schedtune_task_boost(p) > 0;
+	bool prefer_idle = schedtune_prefer_idle(p) > 0;
+#else
+	bool boosted = 0;
+	bool prefer_idle = 0;
 #endif
-
 	if (!(boosted || prefer_idle)) {
 #endif
 	rq = cpu_rq(task_cpu(p));
@@ -2578,9 +2567,6 @@ static void __sched_fork(unsigned long clone_flags, struct task_struct *p)
 
 	p->numa_group = NULL;
 #endif /* CONFIG_NUMA_BALANCING */
-#ifdef CONFIG_HW_QOS_THREAD
-	init_task_qos_info(p);
-#endif
 }
 
 DEFINE_STATIC_KEY_FALSE(sched_numa_balancing);
@@ -3657,9 +3643,7 @@ static noinline void __schedule_bug(struct task_struct *prev)
 		print_ip_sym(preempt_disable_ip);
 		pr_cont("\n");
 	}
-#ifndef CONFIG_HISI_BB_DEBUG
 	if (panic_on_warn)
-#endif
 		panic("scheduling while atomic\n");
 
 	dump_stack();
@@ -8337,7 +8321,6 @@ void __init sched_init(void)
 		 * need to check for rq->cluster being non-NULL.
 		 */
 		rq->cluster = &init_cluster;
-		rq->reserved = 0;
 #endif
 
 #ifdef CONFIG_HISI_CPUFREQ

@@ -641,17 +641,6 @@ int walt_cpu_high_irqload(int cpu)
 #endif
 }
 
-#ifdef CONFIG_HISI_EAS_SCHED
-int walt_cpu_overload_irqload(int cpu)
-{
-#ifdef CONFIG_SCHED_HISI_CHECK_IRQLOAD
-	return walt_irqload(cpu) >= sysctl_sched_walt_cpu_overload_irqload;
-#else
-	return 0;
-#endif
-}
-#endif
-
 #ifdef CONFIG_SCHED_HISI_TOP_TASK
 static void top_task_load_update_history(struct rq *rq, struct task_struct *p,
 				     u32 runtime, int samples, int event)
@@ -1090,6 +1079,7 @@ static void update_cpu_busy_time(struct task_struct *p, struct rq *rq,
 
 		/* Roll window over. If IRQ busy time was just in the current
 		 * window then that is all that need be accounted. */
+		rq->prev_runnable_sum = rq->curr_runnable_sum;
 		if (mark_start > window_start) {
 			*curr_runnable_sum = scale_exec_time(irqtime, rq);
 			return;
@@ -1660,6 +1650,7 @@ migrate_cpu_busy_time(struct task_struct *p,
 		      struct rq *src_rq, struct rq *dest_rq)
 {
 	int new_cpu = cpu_of(dest_rq);
+	int src_cpu = cpu_of(src_rq);
 #ifdef CONFIG_SCHED_HISI_MIGRATE_SPREAD_LOAD
 	cpumask_t prev_cpus, curr_cpus;
 	u32 each_load;
@@ -1668,8 +1659,6 @@ migrate_cpu_busy_time(struct task_struct *p,
 	int i;
 
 #ifdef CONFIG_SCHED_HISI_DOWNMIGRATE_LOWER_LOAD
-	int src_cpu = cpu_of(src_rq);
-
 	/* For task downmigrate, lower task's prev/curr window to prevent
 	 * little cluster's freq increase too much. */
 	if (capacity_orig_of(src_cpu) > capacity_orig_of(new_cpu)) {

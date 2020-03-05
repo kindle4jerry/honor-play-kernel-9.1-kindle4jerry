@@ -84,8 +84,6 @@ __read_mostly unsigned int sysctl_sched_use_walt_cpu_util_freq = 1;
 #ifdef CONFIG_HISI_EAS_SCHED
 __read_mostly unsigned int sysctl_sched_walt_cpu_high_irqload =
     (NSEC_PER_SEC / CONFIG_HZ);
-__read_mostly unsigned int sysctl_sched_walt_cpu_overload_irqload =
-    (3 * NSEC_PER_SEC / CONFIG_HZ);
 #else
 __read_mostly unsigned int sysctl_sched_walt_cpu_high_irqload =
     (10 * NSEC_PER_MSEC);
@@ -1224,12 +1222,6 @@ update_stats_enqueue_sleeper(struct cfs_rq *cfs_rq, struct sched_entity *se)
 					se->statistics.hwstatus.iowait_max = delta;
 					sched_hwstatus_iodelay_caller(tsk, delta);
 				}
-
-#ifdef CONFIG_HW_VIP_THREAD
-		if ((tsk) && (tsk->static_vip) && (tsk->pid == tsk->tgid)) {
-			sched_account_ui_thread_io_block_counts(delta >> 20);
-		}
-#endif
 #endif
 				schedstat_add(se->statistics.iowait_sum, delta);
 				schedstat_inc(se->statistics.iowait_count);
@@ -4024,7 +4016,7 @@ dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 	 * put back on, and if we advance min_vruntime, we'll be placed back
 	 * further than we started -- ie. we'll be penalized.
 	 */
-	if ((flags & (DEQUEUE_SAVE | DEQUEUE_MOVE)) != DEQUEUE_SAVE)
+	if ((flags & (DEQUEUE_SAVE | DEQUEUE_MOVE)) == DEQUEUE_SAVE)
 		update_min_vruntime(cfs_rq);
 }
 
@@ -7327,12 +7319,12 @@ static int select_idle_sibling(struct task_struct *p, int prev, int target)
 	int best_idle_cpu = -1;
 	int best_idle_cstate = INT_MAX;
 	unsigned long best_idle_capacity = ULONG_MAX;
-#ifdef CONFIG_HISI_CPU_ISOLATION
-	struct cpumask allowed_cpus;
-#endif
 
 	schedstat_inc(p->se.statistics.nr_wakeups_sis_attempts);
 	schedstat_inc(this_rq()->eas_stats.sis_attempts);
+#ifdef CONFIG_HISI_CPU_ISOLATION
+	struct cpumask allowed_cpus;
+#endif
 
 	if (!sysctl_sched_cstate_aware) {
 		if (idle_cpu(target)) {
@@ -7499,54 +7491,6 @@ static inline bool hisi_favor_smaller_capacity(struct task_struct *p, int cpu)
 #endif
 }
 
-#ifdef CONFIG_HISI_EAS_SCHED
-static inline unsigned long
-spare_capacity(int cpu, struct task_struct *p)
-{
-	long spare;
-
-	spare = capacity_orig_of(cpu) - cpu_util_wake(cpu, p);
-	if (unlikely(spare < 0))
-		spare = 0;
-
-	return (unsigned long)spare;
-}
-
-static int
-select_max_spare_capacity_cpu(struct task_struct *p, int prev_cpu)
-{
-	int i;
-	cpumask_t search_cpus;
-	int max_spare_cap_cpu = prev_cpu;
-	unsigned long max_spare_cap = spare_capacity(max_spare_cap_cpu, p);
-
-	cpumask_and(&search_cpus, tsk_cpus_allowed(p), cpu_online_mask);
-#ifdef CONFIG_HISI_CPU_ISOLATION
-	cpumask_andnot(&search_cpus, &search_cpus, cpu_isolated_mask);
-#endif
-
-	for_each_cpu(i, &search_cpus) {
-		unsigned long spare_cap;
-		if (i == prev_cpu)
-			continue;
-
-		if (walt_cpu_high_irqload(i))
-			continue;
-
-		if (is_reserved(i))
-			continue;
-
-		spare_cap = spare_capacity(i, p);
-		if (spare_cap > max_spare_cap) {
-			max_spare_cap = spare_cap;
-			max_spare_cap_cpu = i;
-		}
-	}
-
-	return max_spare_cap_cpu;
-}
-#endif
-
 static inline int find_best_target(struct task_struct *p, int *backup_cpu,
 				   bool boosted, bool prefer_idle)
 {
@@ -7655,9 +7599,6 @@ static inline int find_best_target(struct task_struct *p, int *backup_cpu,
 
 #ifdef CONFIG_HISI_EAS_SCHED
 			if (!task_fits_max(p, i))
-				continue;
-
-			if (is_reserved(i))
 				continue;
 
 #ifdef CONFIG_SCHED_WALT
@@ -7937,20 +7878,6 @@ static int wake_cap(struct task_struct *p, int cpu, int prev_cpu)
 	return min_cap * 1024 < task_util(p) * hisi_capacity_margin(cpu);
 }
 
-/*
- * Should task be woken to any available idle cpu?
- *
- * Waking tasks to idle cpu has mixed implications on both performance and
- * power. In many cases, scheduler can't estimate correctly impact of using idle
- * cpus on either performance or power. PF_WAKE_UP_IDLE allows external kernel
- * module to pass a strong hint to scheduler that the task in question should be
- * woken to idle cpu, generally to improve performance.
- */
-static inline int wake_to_idle(struct task_struct *p)
-{
-	return p->flags & PF_WAKE_UP_IDLE;
-}
-
 static int select_energy_cpu_brute(struct task_struct *p, int prev_cpu, int sync)
 {
 	bool boosted, prefer_idle;
@@ -7999,7 +7926,7 @@ static int select_energy_cpu_brute(struct task_struct *p, int prev_cpu, int sync
 
 #ifdef CONFIG_CGROUP_SCHEDTUNE
 	boosted = schedtune_task_boost(p) > 0;
-	prefer_idle = (schedtune_prefer_idle(p) > 0) || wake_to_idle(p);
+	prefer_idle = schedtune_prefer_idle(p) > 0;
 #else
 	boosted = get_sysctl_sched_cfs_boost() > 0;
 	prefer_idle = 0;
@@ -9068,8 +8995,6 @@ static struct task_struct *hisi_get_heaviest_task(
 	struct sched_entity *se = &p->se;
 	unsigned long int max_util = task_util(p), max_preferred_util= 0, util;
 	struct task_struct *tsk, *max_preferred_tsk = NULL, *max_util_task = p;
-	bool boosted = 0;
-	bool prefer_idle = 0;
 
 	/* The currently running task is not on the runqueue */
 	se = __pick_first_entity(cfs_rq_of(se));
@@ -9084,8 +9009,11 @@ static struct task_struct *hisi_get_heaviest_task(
 		tsk = task_of(se);
 		util = boosted_task_util(tsk);
 #ifdef CONFIG_CGROUP_SCHEDTUNE
-		boosted = schedtune_task_boost(tsk) > 0;
-		prefer_idle = schedtune_prefer_idle(tsk) > 0;
+		bool boosted = schedtune_task_boost(tsk) > 0;
+		bool prefer_idle = schedtune_prefer_idle(tsk) > 0;
+#else
+		bool boosted = 0;
+		bool prefer_idle = 0;
 #endif
 
 		if (cpumask_test_cpu(cpu, tsk_cpus_allowed(tsk))) {
@@ -9120,10 +9048,6 @@ static int detach_tasks(struct lb_env *env)
 	struct task_struct *p;
 	unsigned long load;
 	int detached = 0;
-#ifdef CONFIG_HISI_EAS_SCHED
-	bool boosted = 0;
-	bool prefer_idle = 0;
-#endif
 
 	lockdep_assert_held(&env->src_rq->lock);
 
@@ -9158,8 +9082,11 @@ static int detach_tasks(struct lb_env *env)
 			p = hisi_get_heaviest_task(p, env->dst_cpu);
 
 #ifdef CONFIG_CGROUP_SCHEDTUNE
-			boosted = schedtune_task_boost(p) > 0;
-			prefer_idle = schedtune_prefer_idle(p) > 0;
+			bool boosted = schedtune_task_boost(p) > 0;
+			bool prefer_idle = schedtune_prefer_idle(p) > 0;
+#else
+			bool boosted = 0;
+			bool prefer_idle = 0;
 #endif
 			if (!boosted && !prefer_idle &&
 				task_util(p) * 100 < capacity_orig_of(env->src_cpu) * up_migration_util_filter)
@@ -10603,8 +10530,8 @@ static int need_active_balance(struct lb_env *env)
 	}
 
 #ifdef CONFIG_HISI_EAS_SCHED
-	if ((env->idle != CPU_NOT_IDLE) &&
-	    (capacity_orig_of(env->src_cpu) < capacity_orig_of(env->dst_cpu)) &&
+	if ((capacity_orig_of(env->src_cpu) < capacity_orig_of(env->dst_cpu)) &&
+	    (env->idle != CPU_NOT_IDLE) &&
 	    env->src_rq->misfit_task)
 		return 1;
 #else
@@ -11172,9 +11099,6 @@ out_unlock:
 		if (push_task_detached)
 			attach_one_task(target_rq, push_task);
 		put_task_struct(push_task);
-#ifdef CONFIG_HISI_EAS_SCHED
-		clear_reserved(target_cpu);
-#endif
 	}
 
 	if (p)
@@ -11818,9 +11742,6 @@ kick_active_balance(struct rq *rq, struct task_struct *p, int new_cpu)
 	return rc;
 }
 
-#ifdef CONFIG_HISI_EAS_SCHED
-static DEFINE_RAW_SPINLOCK(migration_lock);
-#endif
 void check_for_migration(struct rq *rq, struct task_struct *p)
 {
 	int new_cpu;
@@ -11832,27 +11753,6 @@ void check_for_migration(struct rq *rq, struct task_struct *p)
 		    rq->curr->nr_cpus_allowed == 1)
 			return;
 
-#ifdef CONFIG_HISI_EAS_SCHED
-		raw_spin_lock(&migration_lock);
-		new_cpu = select_energy_cpu_brute(p, cpu, 0);
-		if (capacity_orig_of(new_cpu) <= capacity_orig_of(cpu)) {
-			new_cpu = select_max_spare_capacity_cpu(p, cpu);
-			if (capacity_orig_of(new_cpu) <= capacity_orig_of(cpu))
-				goto out_unlock;
-		}
-
-		active_balance = kick_active_balance(rq, p, new_cpu);
-		if (active_balance) {
-			mark_reserved(new_cpu);
-			raw_spin_unlock(&migration_lock);
-			stop_one_cpu_nowait(cpu,
-					active_load_balance_cpu_stop,
-					rq, &rq->active_balance_work);
-			return;
-		}
-out_unlock:
-		raw_spin_unlock(&migration_lock);
-#else
 		new_cpu = select_energy_cpu_brute(p, cpu, 0);
 		if (capacity_orig_of(new_cpu) > capacity_orig_of(cpu)) {
 			active_balance = kick_active_balance(rq, p, new_cpu);
@@ -11861,7 +11761,6 @@ out_unlock:
 						active_load_balance_cpu_stop,
 						rq, &rq->active_balance_work);
 		}
-#endif
 	}
 }
 
@@ -11986,8 +11885,7 @@ static inline bool vruntime_normalized(struct task_struct *p)
 	 * - A task which has been woken up by try_to_wake_up() and
 	 *   waiting for actually being woken up by sched_ttwu_pending().
 	 */
-	if (!se->sum_exec_runtime ||
-	    (p->state == TASK_WAKING && p->sched_remote_wakeup))
+	if (!se->sum_exec_runtime || p->state == TASK_WAKING)
 		return true;
 
 	return false;

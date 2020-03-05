@@ -101,9 +101,7 @@ static void cpuacct_css_free(struct cgroup_subsys_state *css)
 	struct cpuacct *ca = css_ca(css);
 
 	free_percpu(ca->cpustat);
-	ca->cpustat = NULL;
 	free_percpu(ca->cpuusage);
-	ca->cpuusage = NULL;
 	kfree(ca);
 }
 

@@ -798,7 +798,6 @@ struct rq {
 
 #ifdef CONFIG_HISI_EAS_SCHED
 	struct sched_cluster *cluster;
-	bool reserved;
 #endif
 #ifdef CONFIG_HISI_ED_TASK
 	unsigned int ed_task_running_duration;
@@ -2320,21 +2319,4 @@ static inline bool group_migrate_task(struct task_struct *p,struct rq *src_rq, s
 static inline void sched_get_max_group_util(const struct cpumask *query_cpus, unsigned int *freq) {}
 static inline void sched_update_rtg_tick(struct task_struct *p) { return; }
 static inline struct related_thread_group *task_related_thread_group(struct task_struct *p) { return NULL; }
-#endif
-
-#ifdef CONFIG_HISI_EAS_SCHED
-static inline bool is_reserved(int cpu)
-{
-	return cpu_rq(cpu)->reserved;
-}
-
-static inline void mark_reserved(int cpu)
-{
-	cpu_rq(cpu)->reserved = 1;
-}
-
-static inline void clear_reserved(int cpu)
-{
-	cpu_rq(cpu)->reserved = 0;
-}
 #endif

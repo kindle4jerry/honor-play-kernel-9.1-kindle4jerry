@@ -19,9 +19,9 @@
 
 #include "frame_info.h"
 
-/* QOS value : [1, 120] */
+/* QOS value : [0, 120] */
 #define DEFAULT_FRAME_QOS		60
-#define MIN_FRAME_QOS			1
+#define MIN_FRAME_QOS			0
 #define MAX_FRAME_QOS			120
 
 /* MARGIN value : [-100, 100] */

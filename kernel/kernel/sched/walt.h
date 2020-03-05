@@ -52,11 +52,6 @@ void walt_account_irqtime(int cpu, struct task_struct *curr, u64 delta,
 
 u64 walt_irqload(int cpu);
 int walt_cpu_high_irqload(int cpu);
-#ifdef CONFIG_HISI_EAS_SCHED
-int walt_cpu_overload_irqload(int cpu);
-#else
-#define walt_cpu_overload_irqload(cpu) false
-#endif
 
 extern void reset_task_stats(struct task_struct *p);
 
@@ -89,7 +84,6 @@ static inline void walt_init_cpu_efficiency(void) { }
 static inline u64 walt_ktime_clock(void) { return 0; }
 
 #define walt_cpu_high_irqload(cpu) false
-#define walt_cpu_overload_irqload(cpu) false
 
 #define is_new_task(p) false
 

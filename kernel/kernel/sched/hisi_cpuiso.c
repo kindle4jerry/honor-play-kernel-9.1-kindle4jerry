@@ -1,5 +1,4 @@
 #include <linux/irq.h>
-#include <linux/version.h>
 
 /*
  * Remove a task from the runqueue and pretend that it's migrating. This
@@ -32,29 +31,21 @@ static void attach_tasks(struct list_head *tasks, struct rq *attach_rq)
 	}
 }
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0))
-void set_rq_online(struct rq *rq);
-void set_rq_offline(struct rq *rq);
-static void migrate_tasks(struct rq *dead_rq, struct rq_flags *rf, bool migrate_pinned_tasks);
-#else
+
 static void set_rq_online(struct rq *rq);
 static void set_rq_offline(struct rq *rq);
 static void migrate_tasks(struct rq *dead_rq, bool migrate_pinned_tasks);
-#endif
 
 int do_isolation_work_cpu_stop(void *data)
 {
 	unsigned int cpu = smp_processor_id();
 	struct rq *iso_rq = cpu_rq(cpu);
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0))
-	struct rq_flags rf;
-#endif
 
 	watchdog_disable(cpu);
 
-	local_irq_disable();
-
 	irq_migrate_all_off_this_cpu();
+
+	local_irq_disable();
 
 	sched_ttwu_pending();
 
@@ -69,11 +60,7 @@ int do_isolation_work_cpu_stop(void *data)
 		set_rq_offline(iso_rq);
 	}
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0))
-	migrate_tasks(iso_rq, &rf, false);
-#else
 	migrate_tasks(iso_rq, false);
-#endif
 
 	if (iso_rq->rd)
 		set_rq_online(iso_rq);
@@ -89,11 +76,7 @@ int do_unisolation_work_cpu_stop(void *data)
 	return 0;
 }
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0))
-void init_sched_groups_capacity(int cpu, struct sched_domain *sd);
-#else
 static void init_sched_groups_capacity(int cpu, struct sched_domain *sd);
-#endif
 
 static void sched_update_group_capacities(int cpu)
 {

@@ -78,9 +78,6 @@ struct sugov_tunables {
 	struct gov_attr_set attr_set;
 
 #ifdef CONFIG_HISI_CPU_FREQ_GOV_SCHEDUTIL
-#define DEFAULT_OVERLOAD_DURATION_MS	250
-	/* boost freq to max when running without idle over this duration time */
-	unsigned int overload_duration;
 	/* Hi speed to bump to from lo speed when load burst (default max) */
 	unsigned int hispeed_freq;
 
@@ -174,7 +171,6 @@ struct sugov_policy {
 	struct kthread_worker worker;
 	struct task_struct *thread;
 #ifdef CONFIG_HISI_CPU_FREQ_GOV_SCHEDUTIL
-	u64 overload_duration_ns;
 	u64 floor_validate_time;
 	u64 hispeed_validate_time;
 	u64 time;
@@ -226,8 +222,6 @@ struct sugov_cpu {
 	unsigned long saved_idle_calls;
 #endif
 #ifdef CONFIG_HISI_CPU_FREQ_GOV_SCHEDUTIL
-	u64 idle_update_ts;
-	u64 last_idle_time;
 	unsigned int cpu;
 	bool enabled;
 #endif
@@ -399,6 +393,17 @@ static unsigned int eval_target_freq(struct sugov_policy *sg_policy,
 		if ((cpu_load >= tunables->go_hispeed_load || tunables->boosted) &&
 		    new_freq < tunables->hispeed_freq)
 			new_freq = tunables->hispeed_freq;
+
+#ifdef CONFIG_SCHED_HISI_TOP_TASK_SKIP_HISPEED_LOGIC
+		if (new_freq > tunables->hispeed_freq &&
+		    policy->cur < tunables->hispeed_freq &&
+		    !sg_policy->skip_hispeed_logic)
+			new_freq = tunables->hispeed_freq;
+#else
+		if (new_freq > tunables->hispeed_freq &&
+		    policy->cur < tunables->hispeed_freq)
+			new_freq = tunables->hispeed_freq;
+#endif
 	}
 
 	new_freq = max(sg_policy->iowait_boost, new_freq);
@@ -670,7 +675,7 @@ static void sugov_get_util(unsigned long *util, unsigned long *max, u64 time)
 static void sugov_set_iowait_boost(struct sugov_cpu *sg_cpu, u64 time,
 				   unsigned int flags)
 {
-	if ((flags & SCHED_CPUFREQ_IOWAIT) || walt_cpu_overload_irqload(sg_cpu->cpu)) {
+	if (flags & SCHED_CPUFREQ_IOWAIT) {
 #ifdef CONFIG_HISI_CPU_FREQ_GOV_SCHEDUTIL
 		sg_cpu->iowait_boost += ((sg_cpu->iowait_boost_max - sg_cpu->iowait_boost) >> 1);
 #else
@@ -693,6 +698,9 @@ static void sugov_iowait_boost(struct sugov_cpu *sg_cpu, unsigned long *util,
 #ifdef CONFIG_HISI_CPU_FREQ_GOV_SCHEDUTIL
 	unsigned int descent_step;
 #endif
+
+	if (!boost_util)
+		return;
 
 	if (*util * boost_max < *max * boost_util) {
 #ifdef CONFIG_HISI_CPU_FREQ_GOV_SCHEDUTIL
@@ -780,26 +788,11 @@ static void sugov_boost(struct gov_attr_set *attr_set)
 	}
 }
 
-static inline bool sugov_cpu_is_overload(struct sugov_cpu *sg_cpu, u64 time)
-{
-	u64 idle_time = get_cpu_idle_time(sg_cpu->cpu, NULL, 0);
-	u64 delta;
-
-	if (sg_cpu->last_idle_time != idle_time)
-		sg_cpu->idle_update_ts = time;
-
-	sg_cpu->last_idle_time = idle_time;
-	delta = time - sg_cpu->idle_update_ts;
-
-	return (delta > sg_cpu->sg_policy->overload_duration_ns);
-}
-
 static unsigned int sugov_next_freq_shared_policy(struct sugov_policy *sg_policy,
 		u64 time, unsigned int *early_detection)
 {
 	struct cpufreq_policy *policy = sg_policy->policy;
 	unsigned long util = 0, max = 1;
-	unsigned int overload_detection;
 	int j, i = 0;
 
 	sg_policy->max_cpu = cpumask_first(policy->cpus);
@@ -820,9 +813,7 @@ static unsigned int sugov_next_freq_shared_policy(struct sugov_policy *sg_policy
 		if (delta_ns > TICK_NSEC)
 			j_sg_cpu->iowait_boost = 0;
 
-		overload_detection = sugov_cpu_is_overload(j_sg_cpu, time);
-		sugov_update_util(j, time,
-				  early_detection[i] | overload_detection);
+		sugov_update_util(j, time, early_detection[i]);
 
 		j_util = j_sg_cpu->util;
 		j_max = j_sg_cpu->max;
@@ -838,9 +829,7 @@ static unsigned int sugov_next_freq_shared_policy(struct sugov_policy *sg_policy
 						 j_sg_cpu->max,
 						 top_task_util(cpu_rq(j)),
 						 j_sg_cpu->iowait_boost,
-						 j_sg_cpu->flags,
-						 early_detection[i],
-						 overload_detection);
+						 j_sg_cpu->flags, early_detection[i]);
 
 		j_sg_cpu->flags = 0;
 
@@ -1088,11 +1077,6 @@ static void sugov_work(struct kthread_work *work)
 
 #ifdef CONFIG_HISI_CPU_FREQ_GOV_SCHEDUTIL
 	for_each_cpu(cpu, policy->cpus) {
-		struct sugov_cpu *j_sg_cpu = &per_cpu(sugov_cpu, cpu);
-
-		if (!j_sg_cpu->enabled)
-			goto out;
-
 		rq = cpu_rq(cpu);
 		raw_spin_lock_irq(&rq->lock);
 
@@ -1186,32 +1170,6 @@ static void update_min_rate_limit_us(struct sugov_policy *sg_policy)
 }
 
 #ifdef CONFIG_HISI_CPU_FREQ_GOV_SCHEDUTIL
-static ssize_t overload_duration_show(struct gov_attr_set *attr_set,
-		char *buf)
-{
-	struct sugov_tunables *tunables = to_sugov_tunables(attr_set);
-	return scnprintf(buf, PAGE_SIZE, "%u\n", tunables->overload_duration);
-}
-
-static ssize_t overload_duration_store(struct gov_attr_set *attr_set,
-		const char *buf, size_t count)
-{
-	struct sugov_tunables *tunables = to_sugov_tunables(attr_set);
-	struct sugov_policy *sg_policy;
-	unsigned int val;
-
-	if (kstrtouint(buf, 10, &val))
-		return -EINVAL;
-
-	tunables->overload_duration = val;
-
-	list_for_each_entry(sg_policy, &attr_set->policy_list, tunables_hook) {
-		sg_policy->overload_duration_ns = val * NSEC_PER_MSEC;
-	}
-
-	return count;
-}
-
 static ssize_t go_hispeed_load_show(struct gov_attr_set *attr_set,
 		char *buf)
 {
@@ -1894,7 +1852,6 @@ static ssize_t down_rate_limit_us_store(struct gov_attr_set *attr_set,
 static struct governor_attr up_rate_limit_us = __ATTR_RW(up_rate_limit_us);
 static struct governor_attr down_rate_limit_us = __ATTR_RW(down_rate_limit_us);
 #ifdef CONFIG_HISI_CPU_FREQ_GOV_SCHEDUTIL
-static struct governor_attr overload_duration = __ATTR_RW(overload_duration);
 static struct governor_attr go_hispeed_load = __ATTR_RW(go_hispeed_load);
 static struct governor_attr hispeed_freq = __ATTR_RW(hispeed_freq);
 static struct governor_attr boost = __ATTR_RW(boost);
@@ -1927,7 +1884,6 @@ static struct attribute *sugov_attributes[] = {
 	&up_rate_limit_us.attr,
 	&down_rate_limit_us.attr,
 #ifdef CONFIG_HISI_CPU_FREQ_GOV_SCHEDUTIL
-	&overload_duration.attr,
 	&go_hispeed_load.attr,
 	&hispeed_freq.attr,
 	&boost.attr,
@@ -1960,7 +1916,6 @@ static struct attribute *sugov_attributes[] = {
 
 static struct governor_user_attr schedutil_user_attrs[] = {
 #ifdef CONFIG_HISI_CPU_FREQ_GOV_SCHEDUTIL
-	{.name = "overload_duration", .uid = SYSTEM_UID, .gid = SYSTEM_GID, .mode = 0660},
 	{.name = "target_loads", .uid = SYSTEM_UID, .gid = SYSTEM_GID, .mode = 0660},
 	{.name = "above_hispeed_delay", .uid = SYSTEM_UID, .gid = SYSTEM_GID, .mode = 0660},
 	{.name = "hispeed_freq", .uid = SYSTEM_UID, .gid = SYSTEM_GID, .mode = 0660},
@@ -2142,7 +2097,6 @@ static int sugov_init(struct cpufreq_policy *policy)
 
 #ifdef CONFIG_HISI_CPU_FREQ_GOV_SCHEDUTIL
 	/* initialize the tunable parameters */
-	tunables->overload_duration = DEFAULT_OVERLOAD_DURATION_MS;
 	tunables->above_hispeed_delay = default_above_hispeed_delay;
 	tunables->nabove_hispeed_delay =
 		ARRAY_SIZE(default_above_hispeed_delay);
@@ -2244,8 +2198,6 @@ static int sugov_start(struct cpufreq_policy *policy)
 	unsigned int cpu;
 
 #ifdef CONFIG_HISI_CPU_FREQ_GOV_SCHEDUTIL
-	sg_policy->overload_duration_ns =
-		sg_policy->tunables->overload_duration * NSEC_PER_MSEC;
 	sg_policy->floor_validate_time = 0;
 	sg_policy->hispeed_validate_time = 0;
 	/* allow freq drop as soon as possible when policy->min restored */
@@ -2282,12 +2234,6 @@ static int sugov_start(struct cpufreq_policy *policy)
 		sg_cpu->sg_policy = sg_policy;
 		sg_cpu->flags = SCHED_CPUFREQ_DL;
 		sg_cpu->iowait_boost_max = policy->cpuinfo.max_freq;
-	}
-
-	/*lint -e570 -e574*/
-	for_each_cpu(cpu, policy->cpus) {
-		struct sugov_cpu *sg_cpu = &per_cpu(sugov_cpu, cpu);
-
 		cpufreq_add_update_util_hook(cpu, &sg_cpu->update_util,
 					     policy_is_shared(policy) ?
 							sugov_update_shared :
@@ -2297,7 +2243,6 @@ static int sugov_start(struct cpufreq_policy *policy)
 		sg_cpu->enabled = true;
 #endif
 	}
-	/*lint +e570 +e574*/
 
 #ifdef CONFIG_HISI_CPU_FREQ_GOV_SCHEDUTIL
 	raw_spin_lock(&sg_policy->timer_lock);
