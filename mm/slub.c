@@ -3114,14 +3114,18 @@ redo:
 	barrier();
 
 	if (likely(page == c->page)) {
-		set_freepointer(s, tail_obj, c->freelist);
 #ifdef CONFIG_HW_SLUB_SANITIZE
+		set_freepointer(s, tail_obj, c->freelist);
 	if (unlikely(*(void **)(tail_obj + s->offset) != c->freelist))
 		return;
 #endif
+		void **freelist = READ_ONCE(c->freelist);
+
+		set_freepointer(s, tail_obj, freelist);
+
 		if (unlikely(!this_cpu_cmpxchg_double(
 				s->cpu_slab->freelist, s->cpu_slab->tid,
-				c->freelist, tid,
+				freelist, tid,
 				head, next_tid(tid)))) {
 
 			note_cmpxchg_failure("slab_free", s, tid);
