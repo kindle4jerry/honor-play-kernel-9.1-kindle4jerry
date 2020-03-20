@@ -103,4 +103,4 @@ obj-y				+= list/
 obj-y				+= diag/
 obj-y				+= service/
 
-subdir-ccflags-y += -Werror
+#subdir-ccflags-y += -Werror

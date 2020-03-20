@@ -8,20 +8,21 @@
 
 #下面第一行根据你的aarch的位置设置，第二行照抄
 
-export PATH=$PATH:/home/lumia/linux-x86-clang-aosp9/bin
-#export CROSS_COMPILE=aarch64-linux-android-
-export CC=/home/lumia/linux-x86-clang-aosp9/bin/clang
+export PATH=$PATH:/home/lumia/qclang/toolchains/llvm-Snapdragon_LLVM_for_Android_6.0/prebuilt/bin:/home/lumia/aarch64-linux-android-4.9-bakup/bin/
+export CROSS_COMPILE=aarch64-linux-android-
+export CC=clang
 export CLANG_TRIPLE=aarch64-linux-gnu-
-export CROSS_COMPILE=/home/lumia/gcc-arm-9.2-2019.12-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-
+#export CROSS_COMPILE=/home/lumia/gcc-arm-9.2-2019.12-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-
 export ARCH=arm64
 #export SUBARCH=arm64
-export CROSS_COMPILE_ARM32=/home/lumia/gcc-arm-8.3-2019.03-x86_64-arm-linux-gnueabihf/bin/arm-linux-gnueabi-
+#export CROSS_COMPILE_ARM32=/home/lumia/gcc-arm-8.3-2019.03-x86_64-arm-linux-gnueabihf/bin/arm-linux-gnueabi-
+export GCC_COLORS=auto
 ##以下是官方文档给出的命令 看不懂可以不改
 # 到上一层开一个out文件夹
 mkdir ../out
 
 #照搬就好
-make O=../out merge_kirin970_defconfig
+make O=../out merge_kirin970_defconfig > /dev/null
 
 
 #这个-j的参数可以自己选择，据不可靠消息表明可以设置为cpu线程数的1-2倍
