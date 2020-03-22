@@ -232,7 +232,7 @@ hwcam_data_table_entry_index(hwcam_data_table_t* tbl,
 {
     return tbl->entries <= cur
         && cur < tbl->entries + tbl->entry_count
-        ? cur - tbl->entries : -1ul;
+        ? cur - tbl->entries : -1u;
 }
 
 static inline bool
