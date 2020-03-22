@@ -52,16 +52,14 @@ config SCHED_HISI_USE_WALT
 	  When enabled, you can still change the sysctl node to
 	  enable or disable walt signal for debug purpose.
 
-config SCHED_HISI_MIGRATE_SPREAD_LOAD
-	bool "Spread task's load when inter-cluster migration"
+config SCHED_HISI_MIGRATE_BACK_LOWER_LOAD
+	bool "Divide task's busy time when task migrate out and back"
 	depends on SCHED_WALT
 	default n
 	help
-	  In inter-cluster migration, this option will spread task's
-	  prev_window/curr_window to all cpus that the task has been
-	  running on before in a window. If disabled, task's whole load
-	  will move to dest cpu and that will make dest cpu's cpu load
-	  very high in same cases.
+	  This option divide task's cpu busy time contribution by cluster's
+	  cpu num when task migrate to a cluster that it has run on before.
+	  This will avoid bogus high cpu busy time in some cases.
 
 config SCHED_HISI_TOP_TASK_SKIP_HISPEED_LOGIC
 	bool "Let top task ignore above_hipeed_delay"
