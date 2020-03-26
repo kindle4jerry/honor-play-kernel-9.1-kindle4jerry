@@ -1,8 +1,9 @@
 # honor-play-kernel-9.1-kindle4jerry
 官方开源内核9.1小改  
 ## 功能
-仅解锁SELinux  
+解锁SELinux  
 解锁一些玄学调度器  
+试图用不同的编译器  
 ## 注意
 已经测试可以用的系统 9.1.0.312以及基于312刷的其他第三方系统  
 ## 疑似编译教程
@@ -25,5 +26,13 @@ cd到kernel下面执行 sh build.sh
 /kernel/arch/arm64/configs/merge_kirin970_defconfig中找到并且设置CONFIG_SECURITY_SELINUX_DEVELOP=y  
 在没用上述命令编译内核之前，慎用cmdline的androidboot.selinux=permissive那个方法停用selinux，菊花会让你开不开机的。  
 在用了上述命令编译之后，就可以用cmdline的androidboot.selinux=permissive的方法了，我已经在打包脚本/Kernel/tools/mk1.sh这个脚本里体现了  
-## 一点琐碎
-关于build2.sh我尝试用Clang代替GCC但是在现阶段的华为开源内核上表现很糟糕  
+## 编译器
+我尝试用Clang或者高版本GCC代替官方的GCC4.9  
+build.sh	官方4.9  
+build3.sh	GCC9.2  
+build5.sh	GCC10  
+GCC新版本表现还可以，需要修的地方不多  
+Clang全部搬运到clang分支中，目前clang还存在问题，官方内核默认不支持clang，需要修的地方太多了  
+## 关于调度
+CPU：Schedtutil+EAS在原生的表现比较好，但是在官方emui可能就不是那么好了  
+GPU：拿出了公版mali的调度器mali_ondemand参数方面有待调整，不过默认参数还可以  
