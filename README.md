@@ -9,7 +9,7 @@
 ## 新版编译教程build5.sh或者更新
 编辑/kernel/build5.sh，里面开头有环境配置，里面有注释。  
 除了内核文件之外，还需要一个编译工具在注释里面有提到  
-直接执行biuld5.sh输出在/kernel/tools里  
+直接执行biuld5.sh输出在/build_out里  
 ## 老版编译教程build.sh
 ### 第零步 环境配置
 编辑/kernel/build.sh，里面开头有环境配置，里面有注释。  
@@ -22,7 +22,7 @@ cd到kernel下面执行 sh build.sh
 输出 /out/arch/arm64/boot/Image.gz  
 ### 第二步 打包
 输入 把Image.gz丢到/kernel/tools里  
-/Kernel/tools/mk.sh用于打包内核，文件里有参数的相关注释。  
+/Kernel/tools/mk2.sh用于打包内核，文件里有参数的相关注释。  
 /Kernel/tools/mk1.sh用处同上，多了开机默认permissive的SELinux  
 输出 kernel.img 就能用了  
 或者，不用上述打包方法，直接把Image.gz丢到anykernel2里面REC刷入  

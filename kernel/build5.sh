@@ -13,6 +13,7 @@ export GCC_COLORS=auto
 ##以下是官方文档给出的命令 看不懂可以不改
 # 到上一层开一个out文件夹
 mkdir ../out
+mkdir ../build_out
 #照搬就好
 make ARCH=arm64 O=../out merge_kirin970_defconfig  > /dev/null
 #这个-j的参数可以自己选择，据不可靠消息表明可以设置为cpu线程数的1-2倍
@@ -31,4 +32,7 @@ cd tools/
 ./mkbootimg --kernel Image.gz --base 0x0 --cmdline "loglevel=4 initcall_debug=n page_tracker=on unmovable_isolate1=2:192M,3:224M,4:256M printktimer=0xfff0a000,0x534,0x538 androidboot.selinux=permissive buildvariant=user" --tags_offset 0x07A00000 --kernel_offset 0x00080000 --ramdisk_offset 0x07C00000 --header_version 1 --os_version 9 --os_patch_level 2019-05-05  --output kernel-$BUILD_DATE-permissive.img
 #enforcing版打包
 ./mkbootimg --kernel Image.gz --base 0x0 --cmdline "loglevel=4 initcall_debug=n page_tracker=on unmovable_isolate1=2:192M,3:224M,4:256M printktimer=0xfff0a000,0x534,0x538 androidboot.selinux=enforcing buildvariant=user" --tags_offset 0x07A00000 --kernel_offset 0x00080000 --ramdisk_offset 0x07C00000 --header_version 1 --os_version 9 --os_patch_level 2019-05-05  --output kernel-$BUILD_DATE-enforcing.img
-
+#把输出放到build_out并清理
+cp -f *.img ../../build_out
+rm -f Image.gz
+rm -f *.img
