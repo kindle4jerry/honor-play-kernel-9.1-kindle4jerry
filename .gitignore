@@ -3,4 +3,4 @@ kernel/tools/*.img
 kernel/tools/*.gz
 kernel/drivers/hisi/tzdriver/
 kernel/drivers/hisi/tzdriver/__pycache__/
-
+*.patch
