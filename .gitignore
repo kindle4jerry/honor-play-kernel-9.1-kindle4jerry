@@ -1,7 +1,5 @@
-out/
-build_out/
-kernel/tools/*.img
-kernel/tools/*.gz
-kernel/drivers/hisi/tzdriver/
-kernel/drivers/hisi/tzdriver/__pycache__/
+tools/*.img
+tools/*.gz
+drivers/hisi/tzdriver/
+drivers/hisi/tzdriver/__pycache__/
 *.patch
