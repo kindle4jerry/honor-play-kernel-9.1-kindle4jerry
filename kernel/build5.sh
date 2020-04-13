@@ -36,3 +36,4 @@ cd tools/
 cp -f *.img ../../build_out
 rm -f Image.gz
 rm -f *.img
+cd ..
