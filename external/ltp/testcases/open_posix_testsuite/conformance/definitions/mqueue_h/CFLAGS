@@ -1,1 +1,0 @@
-`$(CC) -xc -c /dev/null -Wno-overflow 2>/dev/null && echo -Wno-overflow`

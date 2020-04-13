@@ -1,2 +1,0 @@
-test01
-	tpm_version reports the version information

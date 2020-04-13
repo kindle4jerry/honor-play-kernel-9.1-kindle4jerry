@@ -1,3 +1,0 @@
-[fake2]
-device_file=/dev/fake2
-sysfs_path=/sys/devices/virtual/fake2

@@ -1,7 +1,0 @@
-at = autotest.Autotest()
-
-def run(machine):
-    host = hosts.create_host(machine)
-    at.run_test('sleeptest', host = host)
-
-job.parallel_simple(run, machines)

@@ -1,6 +1,0 @@
-modname: ext4
-modname: balbalbalbbalbalbalbalbalbalbal
-modname: snd_hda_intel
-modname: snd_timer
-modname: iTCO_wdt
-

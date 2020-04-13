@@ -1,8 +1,0 @@
-#!/bin/sh
-
-echo $$
-
-while :
-do
-	NOOP=1
-done

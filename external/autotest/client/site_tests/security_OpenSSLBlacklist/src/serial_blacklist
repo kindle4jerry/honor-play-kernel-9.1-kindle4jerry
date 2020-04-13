@@ -1,3 +1,0 @@
-# From:
-# openssl x509 -in src/cert.pem -text | grep -A 1 Serial | tail -1 | tr -d ': '
-serial fe88c9c68c5e5aac

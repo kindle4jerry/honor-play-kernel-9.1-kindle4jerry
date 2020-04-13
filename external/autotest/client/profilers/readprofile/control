@@ -1,3 +1,0 @@
-job.profilers.add('readprofile')
-job.run_test('sleeptest', seconds=1)
-job.profilers.delete('readprofile')

@@ -1,3 +1,0 @@
-$IncludeConfig /etc/rsyslog.chromeos
-
-if ($programname == 'spam') then -/var/log/spam.log

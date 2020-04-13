@@ -1,2 +1,0 @@
-# The following cflags are not currently supported due to build error
--DTST_USE_COMPAT16_SYSCALL=1

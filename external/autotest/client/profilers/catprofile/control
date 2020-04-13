@@ -1,3 +1,0 @@
-job.profilers.add('catprofile', ['/proc/meminfo','/proc/uptime'], 'meminfo', 2)
-job.run_test('sleeptest', seconds=5)
-job.profilers.delete('catprofile')

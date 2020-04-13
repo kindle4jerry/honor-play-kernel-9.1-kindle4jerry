@@ -1,6 +1,0 @@
-def run(machine):
-    host = hosts.create_host(machine)
-    while True:
-        host.reboot()
-
-job.parallel_simple(run, machines)

@@ -1,2 +1,0 @@
-test01
-	tpm_getpubek returns the public endorsement key

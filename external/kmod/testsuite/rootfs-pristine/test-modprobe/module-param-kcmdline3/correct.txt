@@ -1,5 +1,0 @@
-options psmouse foo
-options psmouse bar=1
-
-# End of configuration files. Dumping indexes now:
-
