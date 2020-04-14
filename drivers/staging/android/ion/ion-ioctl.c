@@ -208,9 +208,10 @@ long ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	{
 		struct ion_handle *handle;
 
-		handle = ion_handle_get_by_id(client, data.map_iommu.handle);
+		mutex_lock(&client->lock);
+		handle = ion_handle_get_by_id_nolock(client, data.map_iommu.handle);
 		if (IS_ERR(handle)) {
-			pr_err("%s: map iommu but handle invalid!\n", __func__);
+			mutex_unlock(&client->lock);
 			return PTR_ERR(handle);
 		}
 
@@ -223,9 +224,10 @@ long ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	{
 		struct ion_handle *handle;
 
-		handle = ion_handle_get_by_id(client, data.map_iommu.handle);
+		mutex_lock(&client->lock);
+		handle = ion_handle_get_by_id_nolock(client, data.map_iommu.handle);
 		if (IS_ERR(handle)) {
-			pr_err("%s: map iommu but handle invalid!\n", __func__);
+			mutex_unlock(&client->lock);
 			return PTR_ERR(handle);
 		}
 
