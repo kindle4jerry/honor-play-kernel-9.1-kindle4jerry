@@ -143,16 +143,14 @@ long ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	{
 		struct ion_handle *handle;
 
-		mutex_lock(&client->lock);
-		handle = ion_handle_get_by_id_nolock(client, data.handle.handle);
+		handle = ion_handle_get_by_id(client, data.handle.handle);
 		if (IS_ERR(handle)) {
-			mutex_unlock(&client->lock);
+			pr_err("handle is error %d\n", __LINE__);
 			return PTR_ERR(handle);
 		}
 
-		data.fd.fd = ion_share_dma_buf_fd_nolock(client, handle);
-		ion_handle_put_nolock(handle);
-		mutex_unlock(&client->lock);
+		data.fd.fd = ion_share_dma_buf_fd(client, handle);
+		ion_handle_put(handle);
 		if (data.fd.fd < 0)
 			ret = data.fd.fd;
         #ifdef CONFIG_HW_FDLEAK
@@ -208,10 +206,9 @@ long ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	{
 		struct ion_handle *handle;
 
-		mutex_lock(&client->lock);
-		handle = ion_handle_get_by_id_nolock(client, data.map_iommu.handle);
+		handle = ion_handle_get_by_id(client, data.map_iommu.handle);
 		if (IS_ERR(handle)) {
-			mutex_unlock(&client->lock);
+			pr_err("%s: map iommu but handle invalid!\n", __func__);
 			return PTR_ERR(handle);
 		}
 
@@ -224,10 +221,9 @@ long ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	{
 		struct ion_handle *handle;
 
-		mutex_lock(&client->lock);
-		handle = ion_handle_get_by_id_nolock(client, data.map_iommu.handle);
+		handle = ion_handle_get_by_id(client, data.map_iommu.handle);
 		if (IS_ERR(handle)) {
-			mutex_unlock(&client->lock);
+			pr_err("%s: map iommu but handle invalid!\n", __func__);
 			return PTR_ERR(handle);
 		}
 
