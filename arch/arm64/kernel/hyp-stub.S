@@ -28,8 +28,6 @@
 #include <asm/virt.h>
 
 	.text
-	.pushsection	.hyp.text, "ax"
-
 	.align 11
 
 ENTRY_NOTAG(__hyp_stub_vectors)

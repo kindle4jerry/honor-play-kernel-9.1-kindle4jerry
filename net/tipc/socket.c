@@ -2281,15 +2281,11 @@ void tipc_sk_reinit(struct net *net)
 			continue;
 
 		while ((tsk = rhashtable_walk_next(&iter)) && !IS_ERR(tsk)) {
-			sock_hold(&tsk->sk);
-			rhashtable_walk_stop(&iter);
-			lock_sock(&tsk->sk);
+			spin_lock_bh(&tsk->sk.sk_lock.slock);
 			msg = &tsk->phdr;
 			msg_set_prevnode(msg, tn->own_addr);
 			msg_set_orignode(msg, tn->own_addr);
-			release_sock(&tsk->sk);
-			rhashtable_walk_start(&iter);
-			sock_put(&tsk->sk);
+			spin_unlock_bh(&tsk->sk.sk_lock.slock);
 		}
 
 		rhashtable_walk_stop(&iter);

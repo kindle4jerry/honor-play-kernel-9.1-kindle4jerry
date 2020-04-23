@@ -514,14 +514,8 @@ static void do_free_cleaned_kprobes(void)
 	struct optimized_kprobe *op, *tmp;
 
 	list_for_each_entry_safe(op, tmp, &freeing_list, list) {
+		BUG_ON(!kprobe_unused(&op->kp));
 		list_del_init(&op->list);
-		if (WARN_ON_ONCE(!kprobe_unused(&op->kp))) {
-			/*
-			 * This must not happen, but if there is a kprobe
-			 * still in use, keep it on kprobes hash list.
-			 */
-			continue;
-		}
 		free_aggr_kprobe(&op->kp);
 	}
 }
@@ -671,7 +665,7 @@ static void unoptimize_kprobe(struct kprobe *p, bool force)
 }
 
 /* Cancel unoptimizing for reusing */
-static int reuse_unused_kprobe(struct kprobe *ap)
+static void reuse_unused_kprobe(struct kprobe *ap)
 {
 	struct optimized_kprobe *op;
 
@@ -687,11 +681,8 @@ static int reuse_unused_kprobe(struct kprobe *ap)
 	/* Enable the probe again */
 	ap->flags &= ~KPROBE_FLAG_DISABLED;
 	/* Optimize it again (remove from op->list) */
-	if (!kprobe_optready(ap))
-		return -EINVAL;
-
+	BUG_ON(!kprobe_optready(ap));
 	optimize_kprobe(ap);
-	return 0;
 }
 
 /* Remove optimized instructions */
@@ -1452,8 +1443,7 @@ static int check_kprobe_address_safe(struct kprobe *p,
 	/* Ensure it is not in reserved area nor out of text */
 	if (!kernel_text_address((unsigned long) p->addr) ||
 	    within_kprobe_blacklist((unsigned long) p->addr) ||
-	    jump_label_text_reserved(p->addr, p->addr) ||
-	    find_bug((unsigned long)p->addr)) {
+	    jump_label_text_reserved(p->addr, p->addr)) {
 		ret = -EINVAL;
 		goto out;
 	}

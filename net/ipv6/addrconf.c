@@ -1082,8 +1082,7 @@ check_cleanup_prefix_route(struct inet6_ifaddr *ifp, unsigned long *expires)
 	list_for_each_entry(ifa, &idev->addr_list, if_list) {
 		if (ifa == ifp)
 			continue;
-		if (ifa->prefix_len != ifp->prefix_len ||
-		    !ipv6_prefix_equal(&ifa->addr, &ifp->addr,
+		if (!ipv6_prefix_equal(&ifa->addr, &ifp->addr,
 				       ifp->prefix_len))
 			continue;
 		if (ifa->flags & (IFA_F_PERMANENT | IFA_F_NOPREFIXROUTE))
@@ -3222,10 +3221,6 @@ static void addrconf_dev_config(struct net_device *dev)
 	    (dev->type != ARPHRD_6LOWPAN) &&
 	    (dev->type != ARPHRD_NONE)) {
 		/* Alas, we support only Ethernet autoconfiguration. */
-		idev = __in6_dev_get(dev);
-		if (!IS_ERR_OR_NULL(idev) && dev->flags & IFF_UP &&
-		    dev->flags & IFF_MULTICAST)
-			ipv6_mc_up(idev);
 		return;
 	}
 
@@ -5482,20 +5477,13 @@ static void __ipv6_ifa_notify(int event, struct inet6_ifaddr *ifp)
 	switch (event) {
 	case RTM_NEWADDR:
 		/*
-		 * If the address was optimistic we inserted the route at the
-		 * start of our DAD process, so we don't need to do it again.
-		 * If the device was taken down in the middle of the DAD
-		 * cycle there is a race where we could get here without a
-		 * host route, so nothing to insert. That will be fixed when
-		 * the device is brought up.
+		 * If the address was optimistic
+		 * we inserted the route at the start of
+		 * our DAD process, so we don't need
+		 * to do it again
 		 */
-		if (ifp->rt && !rcu_access_pointer(ifp->rt->rt6i_node)) {
+		if (!rcu_access_pointer(ifp->rt->rt6i_node))
 			ip6_ins_rt(ifp->rt);
-		} else if (!ifp->rt && (ifp->idev->dev->flags & IFF_UP)) {
-			pr_warn("BUG: Address %pI6c on device %s is missing its host route.\n",
-				&ifp->addr, ifp->idev->dev->name);
-		}
-
 		if (ifp->idev->cnf.forwarding)
 			addrconf_join_anycast(ifp);
 		if (!ipv6_addr_any(&ifp->peer_addr))

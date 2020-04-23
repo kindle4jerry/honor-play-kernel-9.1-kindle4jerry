@@ -282,7 +282,6 @@ static __net_init int setup_net(struct net *net, struct user_namespace *user_ns)
 
 	atomic_set(&net->count, 1);
 	atomic_set(&net->passive, 1);
-	get_random_bytes(&net->hash_mix, sizeof(u32));
 	net->dev_base_seq = 1;
 	net->user_ns = user_ns;
 	idr_init(&net->netns_ids);
@@ -802,8 +801,7 @@ static int __init net_ns_init(void)
 
 	mutex_unlock(&net_mutex);
 
-	if (register_pernet_subsys(&net_ns_ops))
-		panic("Could not register network namespace subsystems");
+	register_pernet_subsys(&net_ns_ops);
 
 	rtnl_register(PF_UNSPEC, RTM_NEWNSID, rtnl_net_newid, NULL, NULL);
 	rtnl_register(PF_UNSPEC, RTM_GETNSID, rtnl_net_getid, rtnl_net_dumpid,

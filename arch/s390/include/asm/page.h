@@ -35,7 +35,7 @@ void __storage_key_init_range(unsigned long start, unsigned long end);
 
 static inline void storage_key_init_range(unsigned long start, unsigned long end)
 {
-	if (PAGE_DEFAULT_KEY != 0)
+	if (PAGE_DEFAULT_KEY)
 		__storage_key_init_range(start, end);
 }
 

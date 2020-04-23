@@ -247,7 +247,7 @@ static int fbtft_request_gpios_dt(struct fbtft_par *par)
 static int fbtft_backlight_update_status(struct backlight_device *bd)
 {
 	struct fbtft_par *par = bl_get_data(bd);
-	bool polarity = par->polarity;
+	bool polarity = !!(bd->props.state & BL_CORE_DRIVER1);
 
 	fbtft_par_dbg(DEBUG_BACKLIGHT, par,
 		"%s: polarity=%d, power=%d, fb_blank=%d\n",
@@ -296,7 +296,7 @@ void fbtft_register_backlight(struct fbtft_par *par)
 	/* Assume backlight is off, get polarity from current state of pin */
 	bl_props.power = FB_BLANK_POWERDOWN;
 	if (!gpio_get_value(par->gpio.led[0]))
-		par->polarity = true;
+		bl_props.state |= BL_CORE_DRIVER1;
 
 	bd = backlight_device_register(dev_driver_string(par->info->device),
 				par->info->device, par, &fbtft_bl_ops, &bl_props);
@@ -766,7 +766,7 @@ struct fb_info *fbtft_framebuffer_alloc(struct fbtft_display *display,
 	fbdefio->deferred_io =     fbtft_deferred_io;
 	fb_deferred_io_init(info);
 
-	snprintf(info->fix.id, sizeof(info->fix.id), "%s", dev->driver->name);
+	strncpy(info->fix.id, dev->driver->name, 16);
 	info->fix.type =           FB_TYPE_PACKED_PIXELS;
 	info->fix.visual =         FB_VISUAL_TRUECOLOR;
 	info->fix.xpanstep =	   0;
@@ -814,7 +814,7 @@ struct fb_info *fbtft_framebuffer_alloc(struct fbtft_display *display,
 	if (par->gamma.curves && gamma) {
 		if (fbtft_gamma_parse_str(par,
 			par->gamma.curves, gamma, strlen(gamma)))
-			goto release_framebuf;
+			goto alloc_fail;
 	}
 
 	/* Transmit buffer */
@@ -839,7 +839,7 @@ struct fb_info *fbtft_framebuffer_alloc(struct fbtft_display *display,
 			txbuf = devm_kzalloc(par->info->device, txbuflen, GFP_KERNEL);
 		}
 		if (!txbuf)
-			goto release_framebuf;
+			goto alloc_fail;
 		par->txbuf.buf = txbuf;
 		par->txbuf.len = txbuflen;
 	}
@@ -874,9 +874,6 @@ struct fb_info *fbtft_framebuffer_alloc(struct fbtft_display *display,
 	fbtft_merge_fbtftops(&par->fbtftops, &display->fbtftops);
 
 	return info;
-
-release_framebuf:
-	framebuffer_release(info);
 
 alloc_fail:
 	vfree(vmem);

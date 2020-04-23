@@ -15,7 +15,6 @@
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/mm.h>
-#include <linux/highmem.h>
 #include <linux/slab.h>
 #include <asm/sections.h>
 #include <chipset_common/security/check_root.h>
@@ -130,7 +129,7 @@ static inline const char *check_kernel_text_object(const void *ptr,
 static inline const char *check_bogus_address(const void *ptr, unsigned long n)
 {
 	/* Reject if object wraps past end of memory. */
-	if ((unsigned long)ptr + (n - 1) < (unsigned long)ptr)
+	if ((unsigned long)ptr + n < (unsigned long)ptr)
 		return "<wrapped address>";
 
 	/* Reject if NULL or ZERO-allocation. */
@@ -224,12 +223,7 @@ static inline const char *check_heap_object(const void *ptr, unsigned long n,
 	if (!virt_addr_valid(ptr))
 		return NULL;
 
-	/*
-	 * When CONFIG_HIGHMEM=y, kmap_to_page() will give either the
-	 * highmem page or fallback to virt_to_page(). The following
-	 * is effectively a highmem-aware virt_to_head_page().
-	 */
-	page = compound_head(kmap_to_page((void *)ptr));
+	page = virt_to_head_page(ptr);
 
 	/* Check slab allocator for flags and size. */
 	if (PageSlab(page))

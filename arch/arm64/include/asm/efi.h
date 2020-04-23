@@ -53,11 +53,7 @@ int efi_set_mapping_permissions(struct mm_struct *mm, efi_memory_desc_t *md);
 #define efi_is_64bit()			(true)
 
 #define alloc_screen_info(x...)		&screen_info
-
-static inline void free_screen_info(efi_system_table_t *sys_table_arg,
-				    struct screen_info *si)
-{
-}
+#define free_screen_info(x...)
 
 /* redeclare as 'hidden' so the compiler will generate relative references */
 extern struct screen_info screen_info __attribute__((__visibility__("hidden")));

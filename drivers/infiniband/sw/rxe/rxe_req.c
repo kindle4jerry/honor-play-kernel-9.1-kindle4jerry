@@ -72,6 +72,9 @@ static void req_retry(struct rxe_qp *qp)
 	int npsn;
 	int first = 1;
 
+	wqe = queue_head(qp->sq.queue);
+	npsn = (qp->comp.psn - wqe->first_psn) & BTH_PSN_MASK;
+
 	qp->req.wqe_index	= consumer_index(qp->sq.queue);
 	qp->req.psn		= qp->comp.psn;
 	qp->req.opcode		= -1;
@@ -103,17 +106,11 @@ static void req_retry(struct rxe_qp *qp)
 		if (first) {
 			first = 0;
 
-			if (mask & WR_WRITE_OR_SEND_MASK) {
-				npsn = (qp->comp.psn - wqe->first_psn) &
-					BTH_PSN_MASK;
+			if (mask & WR_WRITE_OR_SEND_MASK)
 				retry_first_write_send(qp, wqe, mask, npsn);
-			}
 
-			if (mask & WR_READ_MASK) {
-				npsn = (wqe->dma.length - wqe->dma.resid) /
-					qp->mtu;
+			if (mask & WR_READ_MASK)
 				wqe->iova += npsn * qp->mtu;
-			}
 		}
 
 		wqe->state = wqe_state_posted;
@@ -442,7 +439,7 @@ static struct sk_buff *init_req_packet(struct rxe_qp *qp,
 	if (pkt->mask & RXE_RETH_MASK) {
 		reth_set_rkey(pkt, ibwr->wr.rdma.rkey);
 		reth_set_va(pkt, wqe->iova);
-		reth_set_len(pkt, wqe->dma.resid);
+		reth_set_len(pkt, wqe->dma.length);
 	}
 
 	if (pkt->mask & RXE_IMMDT_MASK)
@@ -646,7 +643,6 @@ next_wqe:
 			rmr->access = wqe->wr.wr.reg.access;
 			rmr->lkey = wqe->wr.wr.reg.key;
 			rmr->rkey = wqe->wr.wr.reg.key;
-			rmr->iova = wqe->wr.wr.reg.mr->iova;
 			wqe->state = wqe_state_done;
 			wqe->status = IB_WC_SUCCESS;
 		} else {

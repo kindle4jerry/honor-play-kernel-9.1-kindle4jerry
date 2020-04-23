@@ -478,7 +478,7 @@ use_default_name:
 				   &rdev->rfkill_ops, rdev);
 
 	if (!rdev->rfkill) {
-		wiphy_free(&rdev->wiphy);
+		kfree(rdev);
 		return NULL;
 	}
 

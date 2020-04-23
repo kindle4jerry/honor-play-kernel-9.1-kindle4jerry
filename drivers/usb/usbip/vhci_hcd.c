@@ -318,7 +318,6 @@ static int vhci_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue,
 			default:
 				break;
 			}
-			break;
 		default:
 			usbip_dbg_vhci_rh(" ClearPortFeature: default %x\n",
 					  wValue);
@@ -466,14 +465,13 @@ static void vhci_tx_urb(struct urb *urb)
 {
 	struct vhci_device *vdev = get_vdev(urb->dev);
 	struct vhci_priv *priv;
-	struct vhci_hcd *vhci;
+	struct vhci_hcd *vhci = vdev_to_vhci(vdev);
 	unsigned long flags;
 
 	if (!vdev) {
 		pr_err("could not get virtual device");
 		return;
 	}
-	vhci = vdev_to_vhci(vdev);
 
 	priv = kzalloc(sizeof(struct vhci_priv), GFP_ATOMIC);
 	if (!priv) {
@@ -514,10 +512,8 @@ static int vhci_urb_enqueue(struct usb_hcd *hcd, struct urb *urb,
 	}
 	vdev = &vhci->vdev[portnum-1];
 
-	if (!urb->transfer_buffer && urb->transfer_buffer_length) {
-		dev_dbg(dev, "Null URB transfer buffer\n");
-		return -EINVAL;
-	}
+	/* patch to usb_sg_init() is in 2.5.60 */
+	BUG_ON(!urb->transfer_buffer && urb->transfer_buffer_length);
 
 	spin_lock_irqsave(&vhci->lock, flags);
 

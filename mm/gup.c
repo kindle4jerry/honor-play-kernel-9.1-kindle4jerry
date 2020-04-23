@@ -153,10 +153,7 @@ retry:
 	}
 
 	if (flags & FOLL_GET) {
-		if (unlikely(!try_get_page(page))) {
-			page = ERR_PTR(-ENOMEM);
-			goto out;
-		}
+		get_page(page);
 
 		/* drop the pgmap reference now that we hold the page */
 		if (pgmap) {
@@ -295,10 +292,7 @@ struct page *follow_page_mask(struct vm_area_struct *vma,
 			if (pmd_trans_unstable(pmd))
 				ret = -EBUSY;
 		} else {
-			if (unlikely(!try_get_page(page))) {
-				spin_unlock(ptl);
-				return ERR_PTR(-ENOMEM);
-			}
+			get_page(page);
 			spin_unlock(ptl);
 			lock_page(page);
 			ret = split_huge_page(page);
@@ -354,10 +348,7 @@ static int get_gate_page(struct mm_struct *mm, unsigned long address,
 			goto unmap;
 		*page = pte_page(*pte);
 	}
-	if (unlikely(!try_get_page(*page))) {
-		ret = -ENOMEM;
-		goto unmap;
-	}
+	get_page(*page);
 out:
 	ret = 0;
 unmap:
@@ -1240,20 +1231,6 @@ struct page *get_dump_page(unsigned long addr)
  */
 #ifdef CONFIG_HAVE_GENERIC_RCU_GUP
 
-/*
- * Return the compund head page with ref appropriately incremented,
- * or NULL if that failed.
- */
-static inline struct page *try_get_compound_head(struct page *page, int refs)
-{
-	struct page *head = compound_head(page);
-	if (WARN_ON_ONCE(page_ref_count(head) < 0))
-		return NULL;
-	if (unlikely(!page_cache_add_speculative(head, refs)))
-		return NULL;
-	return head;
-}
-
 #ifdef __HAVE_ARCH_PTE_SPECIAL
 static int gup_pte_range(pmd_t pmd, unsigned long addr, unsigned long end,
 			 int write, struct page **pages, int *nr)
@@ -1286,9 +1263,9 @@ static int gup_pte_range(pmd_t pmd, unsigned long addr, unsigned long end,
 
 		VM_BUG_ON(!pfn_valid(pte_pfn(pte)));
 		page = pte_page(pte);
+		head = compound_head(page);
 
-		head = try_get_compound_head(page, 1);
-		if (!head)
+		if (!page_cache_get_speculative(head))
 			goto pte_unmap;
 
 		if (unlikely(pte_val(pte) != pte_val(*ptep))) {
@@ -1336,16 +1313,17 @@ static int gup_huge_pmd(pmd_t orig, pmd_t *pmdp, unsigned long addr,
 		return 0;
 
 	refs = 0;
-	page = pmd_page(orig) + ((addr & ~PMD_MASK) >> PAGE_SHIFT);
+	head = pmd_page(orig);
+	page = head + ((addr & ~PMD_MASK) >> PAGE_SHIFT);
 	do {
+		VM_BUG_ON_PAGE(compound_head(page) != head, page);
 		pages[*nr] = page;
 		(*nr)++;
 		page++;
 		refs++;
 	} while (addr += PAGE_SIZE, addr != end);
 
-	head = try_get_compound_head(pmd_page(orig), refs);
-	if (!head) {
+	if (!page_cache_add_speculative(head, refs)) {
 		*nr -= refs;
 		return 0;
 	}
@@ -1370,16 +1348,17 @@ static int gup_huge_pud(pud_t orig, pud_t *pudp, unsigned long addr,
 		return 0;
 
 	refs = 0;
-	page = pud_page(orig) + ((addr & ~PUD_MASK) >> PAGE_SHIFT);
+	head = pud_page(orig);
+	page = head + ((addr & ~PUD_MASK) >> PAGE_SHIFT);
 	do {
+		VM_BUG_ON_PAGE(compound_head(page) != head, page);
 		pages[*nr] = page;
 		(*nr)++;
 		page++;
 		refs++;
 	} while (addr += PAGE_SIZE, addr != end);
 
-	head = try_get_compound_head(pud_page(orig), refs);
-	if (!head) {
+	if (!page_cache_add_speculative(head, refs)) {
 		*nr -= refs;
 		return 0;
 	}
@@ -1405,16 +1384,17 @@ static int gup_huge_pgd(pgd_t orig, pgd_t *pgdp, unsigned long addr,
 		return 0;
 
 	refs = 0;
-	page = pgd_page(orig) + ((addr & ~PGDIR_MASK) >> PAGE_SHIFT);
+	head = pgd_page(orig);
+	page = head + ((addr & ~PGDIR_MASK) >> PAGE_SHIFT);
 	do {
+		VM_BUG_ON_PAGE(compound_head(page) != head, page);
 		pages[*nr] = page;
 		(*nr)++;
 		page++;
 		refs++;
 	} while (addr += PAGE_SIZE, addr != end);
 
-	head = try_get_compound_head(pgd_page(orig), refs);
-	if (!head) {
+	if (!page_cache_add_speculative(head, refs)) {
 		*nr -= refs;
 		return 0;
 	}
@@ -1443,8 +1423,7 @@ static int gup_pmd_range(pud_t pud, unsigned long addr, unsigned long end,
 		if (pmd_none(pmd))
 			return 0;
 
-		if (unlikely(pmd_trans_huge(pmd) || pmd_huge(pmd) ||
-			     pmd_devmap(pmd))) {
+		if (unlikely(pmd_trans_huge(pmd) || pmd_huge(pmd))) {
 			/*
 			 * NUMA hinting faults need to be handled in the GUP
 			 * slowpath for accounting purposes and so that they

@@ -187,16 +187,10 @@ static inline struct lowpan_peer *peer_lookup_dst(struct lowpan_btle_dev *dev,
 	}
 
 	if (!rt) {
-		if (ipv6_addr_any(&lowpan_cb(skb)->gw)) {
-			/* There is neither route nor gateway,
-			 * probably the destination is a direct peer.
-			 */
-			nexthop = daddr;
-		} else {
-			/* There is a known gateway
-			 */
-			nexthop = &lowpan_cb(skb)->gw;
-		}
+		nexthop = &lowpan_cb(skb)->gw;
+
+		if (ipv6_addr_any(nexthop))
+			return NULL;
 	} else {
 		nexthop = rt6_nexthop(rt, daddr);
 

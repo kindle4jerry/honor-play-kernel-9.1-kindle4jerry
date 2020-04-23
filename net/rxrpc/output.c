@@ -96,7 +96,7 @@ static size_t rxrpc_fill_out_ack(struct rxrpc_call *call,
  */
 int rxrpc_send_ack_packet(struct rxrpc_call *call, bool ping)
 {
-	struct rxrpc_connection *conn;
+	struct rxrpc_connection *conn = NULL;
 	struct rxrpc_ack_buffer *pkt;
 	struct msghdr msg;
 	struct kvec iov[2];
@@ -106,14 +106,18 @@ int rxrpc_send_ack_packet(struct rxrpc_call *call, bool ping)
 	int ret;
 	u8 reason;
 
-	if (test_bit(RXRPC_CALL_DISCONNECTED, &call->flags))
+	spin_lock_bh(&call->lock);
+	if (call->conn)
+		conn = rxrpc_get_connection_maybe(call->conn);
+	spin_unlock_bh(&call->lock);
+	if (!conn)
 		return -ECONNRESET;
 
 	pkt = kzalloc(sizeof(*pkt), GFP_KERNEL);
-	if (!pkt)
+	if (!pkt) {
+		rxrpc_put_connection(conn);
 		return -ENOMEM;
-
-	conn = call->conn;
+	}
 
 	msg.msg_name	= &call->peer->srx.transport;
 	msg.msg_namelen	= call->peer->srx.transport_len;
@@ -200,6 +204,7 @@ int rxrpc_send_ack_packet(struct rxrpc_call *call, bool ping)
 	}
 
 out:
+	rxrpc_put_connection(conn);
 	kfree(pkt);
 	return ret;
 }
@@ -209,17 +214,19 @@ out:
  */
 int rxrpc_send_abort_packet(struct rxrpc_call *call)
 {
-	struct rxrpc_connection *conn;
+	struct rxrpc_connection *conn = NULL;
 	struct rxrpc_abort_buffer pkt;
 	struct msghdr msg;
 	struct kvec iov[1];
 	rxrpc_serial_t serial;
 	int ret;
 
-	if (test_bit(RXRPC_CALL_DISCONNECTED, &call->flags))
+	spin_lock_bh(&call->lock);
+	if (call->conn)
+		conn = rxrpc_get_connection_maybe(call->conn);
+	spin_unlock_bh(&call->lock);
+	if (!conn)
 		return -ECONNRESET;
-
-	conn = call->conn;
 
 	msg.msg_name	= &call->peer->srx.transport;
 	msg.msg_namelen	= call->peer->srx.transport_len;
@@ -248,6 +255,7 @@ int rxrpc_send_abort_packet(struct rxrpc_call *call)
 	ret = kernel_sendmsg(conn->params.local->socket,
 			     &msg, iov, 1, sizeof(pkt));
 
+	rxrpc_put_connection(conn);
 	return ret;
 }
 
@@ -392,9 +400,6 @@ send_fragmentable:
 		}
 		break;
 #endif
-
-	default:
-		BUG();
 	}
 
 	up_write(&conn->params.local->defrag_sem);

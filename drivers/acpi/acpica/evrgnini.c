@@ -50,6 +50,9 @@
 #define _COMPONENT          ACPI_EVENTS
 ACPI_MODULE_NAME("evrgnini")
 
+/* Local prototypes */
+static u8 acpi_ev_is_pci_root_bridge(struct acpi_namespace_node *node);
+
 /*******************************************************************************
  *
  * FUNCTION:    acpi_ev_system_memory_region_setup
@@ -64,6 +67,7 @@ ACPI_MODULE_NAME("evrgnini")
  * DESCRIPTION: Setup a system_memory operation region
  *
  ******************************************************************************/
+
 acpi_status
 acpi_ev_system_memory_region_setup(acpi_handle handle,
 				   u32 function,
@@ -343,7 +347,7 @@ acpi_ev_pci_config_region_setup(acpi_handle handle,
  *
  ******************************************************************************/
 
-u8 acpi_ev_is_pci_root_bridge(struct acpi_namespace_node *node)
+static u8 acpi_ev_is_pci_root_bridge(struct acpi_namespace_node *node)
 {
 	acpi_status status;
 	struct acpi_pnp_device_id *hid;

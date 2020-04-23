@@ -938,7 +938,7 @@ int prism2mgmt_flashdl_state(struct wlandevice *wlandev, void *msgp)
 		}
 	}
 
-	return result;
+	return 0;
 }
 
 /*----------------------------------------------------------------

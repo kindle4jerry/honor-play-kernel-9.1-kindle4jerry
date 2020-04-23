@@ -6,12 +6,9 @@ ARCH := x86
 endif
 
 # always use the host compiler
-HOSTAR	?= ar
-HOSTCC	?= gcc
-HOSTLD	?= ld
-AR	 = $(HOSTAR)
-CC	 = $(HOSTCC)
-LD	 = $(HOSTLD)
+CC = gcc
+LD = ld
+AR = ar
 
 ifeq ($(srctree),)
 srctree := $(patsubst %/,%,$(dir $(shell pwd)))
@@ -28,7 +25,7 @@ OBJTOOL_IN := $(OBJTOOL)-in.o
 all: $(OBJTOOL)
 
 INCLUDES := -I$(srctree)/tools/include -I$(srctree)/tools/arch/$(HOSTARCH)/include/uapi
-CFLAGS   := -Wall -Werror $(EXTRA_WARNINGS) -fomit-frame-pointer -O2 -g $(INCLUDES)
+CFLAGS   += -Wall -Werror $(EXTRA_WARNINGS) -fomit-frame-pointer -O2 -g $(INCLUDES)
 LDFLAGS  += -lelf $(LIBSUBCMD)
 
 # Allow old libelf to be used:

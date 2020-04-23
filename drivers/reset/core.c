@@ -299,29 +299,28 @@ struct reset_control *__of_reset_control_get(struct device_node *node,
 			break;
 		}
 	}
+	of_node_put(args.np);
 
 	if (!rcdev) {
-		rstc = ERR_PTR(-EPROBE_DEFER);
-		goto out;
+		mutex_unlock(&reset_list_mutex);
+		return ERR_PTR(-EPROBE_DEFER);
 	}
 
 	if (WARN_ON(args.args_count != rcdev->of_reset_n_cells)) {
-		rstc = ERR_PTR(-EINVAL);
-		goto out;
+		mutex_unlock(&reset_list_mutex);
+		return ERR_PTR(-EINVAL);
 	}
 
 	rstc_id = rcdev->of_xlate(rcdev, &args);
 	if (rstc_id < 0) {
-		rstc = ERR_PTR(rstc_id);
-		goto out;
+		mutex_unlock(&reset_list_mutex);
+		return ERR_PTR(rstc_id);
 	}
 
 	/* reset_list_mutex also protects the rcdev's reset_control list */
 	rstc = __reset_control_get(rcdev, rstc_id, shared);
 
-out:
 	mutex_unlock(&reset_list_mutex);
-	of_node_put(args.np);
 
 	return rstc;
 }

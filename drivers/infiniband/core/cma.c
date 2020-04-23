@@ -1408,16 +1408,9 @@ static bool cma_match_net_dev(const struct rdma_cm_id *id,
 		       (addr->src_addr.ss_family == AF_IB ||
 			cma_protocol_roce_dev_port(id->device, port_num));
 
-	/*
-	 * Net namespaces must match, and if the listner is listening
-	 * on a specific netdevice than netdevice must match as well.
-	 */
-	if (net_eq(dev_net(net_dev), addr->dev_addr.net) &&
-	    (!!addr->dev_addr.bound_dev_if ==
-	     (addr->dev_addr.bound_dev_if == net_dev->ifindex)))
-		return true;
-	else
-		return false;
+	return !addr->dev_addr.bound_dev_if ||
+	       (net_eq(dev_net(net_dev), addr->dev_addr.net) &&
+		addr->dev_addr.bound_dev_if == net_dev->ifindex);
 }
 
 static struct rdma_id_private *cma_find_listener(
@@ -2116,10 +2109,9 @@ static int iw_conn_req_handler(struct iw_cm_id *cm_id,
 		conn_id->cm_id.iw = NULL;
 		cma_exch(conn_id, RDMA_CM_DESTROYING);
 		mutex_unlock(&conn_id->handler_mutex);
-		mutex_unlock(&listen_id->handler_mutex);
 		cma_deref_id(conn_id);
 		rdma_destroy_id(&conn_id->id);
-		return ret;
+		goto out;
 	}
 
 	mutex_unlock(&conn_id->handler_mutex);
@@ -2565,7 +2557,6 @@ static int cma_resolve_iboe_route(struct rdma_id_private *id_priv)
 err2:
 	kfree(route->path_rec);
 	route->path_rec = NULL;
-	route->num_paths = 0;
 err1:
 	kfree(work);
 	return ret;
@@ -4435,7 +4426,6 @@ err:
 	unregister_netdevice_notifier(&cma_nb);
 	rdma_addr_unregister_client(&addr_client);
 	ib_sa_unregister_client(&sa_client);
-	unregister_pernet_subsys(&cma_pernet_operations);
 err_wq:
 	destroy_workqueue(cma_wq);
 	return ret;

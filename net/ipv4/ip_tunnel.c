@@ -155,8 +155,11 @@ struct ip_tunnel *ip_tunnel_lookup(struct ip_tunnel_net *itn,
 			cand = t;
 	}
 
+	if (flags & TUNNEL_NO_KEY)
+		goto skip_key_lookup;
+
 	hlist_for_each_entry_rcu(t, head, hash_node) {
-		if ((!(flags & TUNNEL_NO_KEY) && t->parms.i_key != key) ||
+		if (t->parms.i_key != key ||
 		    t->parms.iph.saddr != 0 ||
 		    t->parms.iph.daddr != 0 ||
 		    !(t->dev->flags & IFF_UP))
@@ -168,6 +171,7 @@ struct ip_tunnel *ip_tunnel_lookup(struct ip_tunnel_net *itn,
 			cand = t;
 	}
 
+skip_key_lookup:
 	if (cand)
 		return cand;
 
@@ -649,19 +653,13 @@ void ip_tunnel_xmit(struct sk_buff *skb, struct net_device *dev,
 	dst = tnl_params->daddr;
 	if (dst == 0) {
 		/* NBMA tunnel */
-		struct ip_tunnel_info *tun_info;
 
 		if (!skb_dst(skb)) {
 			dev->stats.tx_fifo_errors++;
 			goto tx_error;
 		}
 
-		tun_info = skb_tunnel_info(skb);
-		if (tun_info && (tun_info->mode & IP_TUNNEL_INFO_TX) &&
-		    ip_tunnel_info_af(tun_info) == AF_INET &&
-		    tun_info->key.u.ipv4.dst)
-			dst = tun_info->key.u.ipv4.dst;
-		else if (skb->protocol == htons(ETH_P_IP)) {
+		if (skb->protocol == htons(ETH_P_IP)) {
 			rt = skb_rtable(skb);
 			dst = rt_nexthop(rt, inner_iph->daddr);
 		}
@@ -1180,8 +1178,10 @@ int ip_tunnel_init(struct net_device *dev)
 	iph->version		= 4;
 	iph->ihl		= 5;
 
-	if (tunnel->collect_md)
+	if (tunnel->collect_md) {
+		dev->features |= NETIF_F_NETNS_LOCAL;
 		netif_keep_dst(dev);
+	}
 	return 0;
 }
 EXPORT_SYMBOL_GPL(ip_tunnel_init);

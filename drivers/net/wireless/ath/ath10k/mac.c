@@ -947,7 +947,7 @@ static inline int ath10k_vdev_setup_sync(struct ath10k *ar)
 	if (time_left == 0)
 		return -ETIMEDOUT;
 
-	return ar->last_wmi_vdev_start_status;
+	return 0;
 }
 
 static int ath10k_monitor_vdev_start(struct ath10k *ar, int vdev_id)
@@ -1594,10 +1594,6 @@ static int ath10k_mac_setup_prb_tmpl(struct ath10k_vif *arvif)
 		return 0;
 
 	if (arvif->vdev_type != WMI_VDEV_TYPE_AP)
-		return 0;
-
-	 /* For mesh, probe response and beacon share the same template */
-	if (ieee80211_vif_is_mesh(vif))
 		return 0;
 
 	prb = ieee80211_proberesp_get(hw, vif);
@@ -3006,13 +3002,6 @@ static int ath10k_update_channel_list(struct ath10k *ar)
 
 			passive = channel->flags & IEEE80211_CHAN_NO_IR;
 			ch->passive = passive;
-
-			/* the firmware is ignoring the "radar" flag of the
-			 * channel and is scanning actively using Probe Requests
-			 * on "Radar detection"/DFS channels which are not
-			 * marked as "available"
-			 */
-			ch->passive |= ch->chan_radar;
 
 			ch->freq = channel->center_freq;
 			ch->band_center_freq1 = channel->center_freq;

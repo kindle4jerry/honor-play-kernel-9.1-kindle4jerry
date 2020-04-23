@@ -134,7 +134,7 @@ static int etnaviv_iommu_find_iova(struct etnaviv_iommu *mmu,
 		 */
 		if (mmu->last_iova) {
 			mmu->last_iova = 0;
-			mmu->flush_seq++;
+			mmu->need_flush = true;
 			continue;
 		}
 
@@ -197,7 +197,7 @@ static int etnaviv_iommu_find_iova(struct etnaviv_iommu *mmu,
 		 * associated commit requesting this mapping, and retry the
 		 * allocation one more time.
 		 */
-		mmu->flush_seq++;
+		mmu->need_flush = true;
 	}
 
 	return ret;
@@ -354,7 +354,7 @@ u32 etnaviv_iommu_get_cmdbuf_va(struct etnaviv_gpu *gpu,
 		 * that the FE MMU prefetch won't load invalid entries.
 		 */
 		mmu->last_iova = buf->vram_node.start + buf->size + SZ_64K;
-		mmu->flush_seq++;
+		gpu->mmu->need_flush = true;
 		mutex_unlock(&mmu->lock);
 
 		return (u32)buf->vram_node.start;

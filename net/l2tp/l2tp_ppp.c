@@ -437,11 +437,11 @@ static void pppol2tp_session_close(struct l2tp_session *session)
 
 	BUG_ON(session->magic != L2TP_SESSION_MAGIC);
 
-	if (sock)
+	if (sock) {
 		inet_shutdown(sock, SEND_SHUTDOWN);
-
-	/* Don't let the session go away before our socket does */
-	l2tp_session_inc_refcount(session);
+		/* Don't let the session go away before our socket does */
+		l2tp_session_inc_refcount(session);
+	}
 }
 
 /* Really kill the session socket. (Called from sock_put() if
@@ -1783,9 +1783,6 @@ static const struct proto_ops pppol2tp_ops = {
 	.recvmsg	= pppol2tp_recvmsg,
 	.mmap		= sock_no_mmap,
 	.ioctl		= pppox_ioctl,
-#ifdef CONFIG_COMPAT
-	.compat_ioctl = pppox_compat_ioctl,
-#endif
 };
 
 static const struct pppox_proto pppol2tp_proto = {

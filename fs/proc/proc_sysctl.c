@@ -500,10 +500,6 @@ static struct inode *proc_sys_make_inode(struct super_block *sb,
 
 	if (root->set_ownership)
 		root->set_ownership(head, table, &inode->i_uid, &inode->i_gid);
-	else {
-		inode->i_uid = GLOBAL_ROOT_UID;
-		inode->i_gid = GLOBAL_ROOT_GID;
-	}
 
 	return inode;
 }
@@ -1608,11 +1604,8 @@ static void drop_sysctl_table(struct ctl_table_header *header)
 	if (--header->nreg)
 		return;
 
-	if (parent) {
-		put_links(header);
-		start_unregistering(header);
-	}
-
+	put_links(header);
+	start_unregistering(header);
 	if (!--header->count)
 		kfree_rcu(header, rcu);
 

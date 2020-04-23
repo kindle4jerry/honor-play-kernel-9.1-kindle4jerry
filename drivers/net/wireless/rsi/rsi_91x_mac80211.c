@@ -199,7 +199,6 @@ void rsi_mac80211_detach(struct rsi_hw *adapter)
 		ieee80211_stop_queues(hw);
 		ieee80211_unregister_hw(hw);
 		ieee80211_free_hw(hw);
-		adapter->hw = NULL;
 	}
 
 	rsi_remove_dbgfs(adapter);

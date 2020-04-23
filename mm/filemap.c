@@ -404,8 +404,7 @@ int __filemap_fdatawrite_range(struct address_space *mapping, loff_t start,
 		.range_end = end,
 	};
 
-	if (!mapping_cap_writeback_dirty(mapping) ||
-	    !mapping_tagged(mapping, PAGECACHE_TAG_DIRTY))
+	if (!mapping_cap_writeback_dirty(mapping))
 		return 0;
 
 	wbc_attach_fdatawrite_inode(&wbc, mapping->host);

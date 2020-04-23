@@ -63,7 +63,6 @@
 
 extern struct workqueue_struct *ib_wq;
 extern struct workqueue_struct *ib_comp_wq;
-extern struct workqueue_struct *ib_comp_unbound_wq;
 
 union ib_gid {
 	u8	raw[16];
@@ -1026,7 +1025,7 @@ struct ib_qp_init_attr {
 	struct ib_qp_cap	cap;
 	enum ib_sig_type	sq_sig_type;
 	enum ib_qp_type		qp_type;
-	u32			create_flags;
+	enum ib_qp_create_flags	create_flags;
 
 	/*
 	 * Only needed for special QP types, or when using the RW API.
@@ -1416,10 +1415,9 @@ struct ib_ah {
 typedef void (*ib_comp_handler)(struct ib_cq *cq, void *cq_context);
 
 enum ib_poll_context {
-	IB_POLL_DIRECT,		   /* caller context, no hw completions */
-	IB_POLL_SOFTIRQ,	   /* poll from softirq context */
-	IB_POLL_WORKQUEUE,	   /* poll from workqueue */
-	IB_POLL_UNBOUND_WORKQUEUE, /* poll from unbound workqueue */
+	IB_POLL_DIRECT,		/* caller context, no hw completions */
+	IB_POLL_SOFTIRQ,	/* poll from softirq context */
+	IB_POLL_WORKQUEUE,	/* poll from workqueue */
 };
 
 struct ib_cq {
@@ -1436,7 +1434,6 @@ struct ib_cq {
 		struct irq_poll		iop;
 		struct work_struct	work;
 	};
-	struct workqueue_struct *comp_wq;
 };
 
 struct ib_srq {

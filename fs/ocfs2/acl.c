@@ -334,8 +334,8 @@ int ocfs2_acl_chmod(struct inode *inode, struct buffer_head *bh)
 		return 0;
 
 	acl = ocfs2_get_acl_nolock(inode, ACL_TYPE_ACCESS, bh);
-	if (IS_ERR_OR_NULL(acl))
-		return PTR_ERR_OR_ZERO(acl);
+	if (IS_ERR(acl) || !acl)
+		return PTR_ERR(acl);
 	ret = __posix_acl_chmod(&acl, GFP_KERNEL, inode->i_mode);
 	if (ret)
 		return ret;

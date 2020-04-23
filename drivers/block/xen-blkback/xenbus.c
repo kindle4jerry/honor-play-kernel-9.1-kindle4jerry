@@ -178,15 +178,6 @@ static struct xen_blkif *xen_blkif_alloc(domid_t domid)
 	blkif->domid = domid;
 	atomic_set(&blkif->refcnt, 1);
 	init_completion(&blkif->drain_complete);
-
-	/*
-	 * Because freeing back to the cache may be deferred, it is not
-	 * safe to unload the module (and hence destroy the cache) until
-	 * this has completed. To prevent premature unloading, take an
-	 * extra module reference here and release only when the object
-	 * has been freed back to the cache.
-	 */
-	__module_get(THIS_MODULE);
 	INIT_WORK(&blkif->free_work, xen_blkif_deferred_free);
 
 	return blkif;
@@ -331,7 +322,6 @@ static void xen_blkif_free(struct xen_blkif *blkif)
 
 	/* Make sure everything is drained before shutting down */
 	kmem_cache_free(xen_blkif_cachep, blkif);
-	module_put(THIS_MODULE);
 }
 
 int __init xen_blkif_interface_init(void)
@@ -977,7 +967,6 @@ static int read_per_ring_refs(struct xen_blkif_ring *ring, const char *dir)
 	}
 	blkif->nr_ring_pages = nr_grefs;
 
-	err = -ENOMEM;
 	for (i = 0; i < nr_grefs * XEN_BLKIF_REQS_PER_PAGE; i++) {
 		req = kzalloc(sizeof(*req), GFP_KERNEL);
 		if (!req)
@@ -1000,7 +989,7 @@ static int read_per_ring_refs(struct xen_blkif_ring *ring, const char *dir)
 	err = xen_blkif_map(ring, ring_ref, nr_grefs, evtchn);
 	if (err) {
 		xenbus_dev_fatal(dev, err, "mapping ring-ref port %u", evtchn);
-		goto fail;
+		return err;
 	}
 
 	return 0;
@@ -1020,7 +1009,8 @@ fail:
 		}
 		kfree(req);
 	}
-	return err;
+	return -ENOMEM;
+
 }
 
 static int connect_ring(struct backend_info *be)

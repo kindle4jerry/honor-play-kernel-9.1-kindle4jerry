@@ -602,11 +602,7 @@ static inline struct sock *__udp4_lib_lookup_skb(struct sk_buff *skb,
 struct sock *udp4_lib_lookup_skb(struct sk_buff *skb,
 				 __be16 sport, __be16 dport)
 {
-	const struct iphdr *iph = ip_hdr(skb);
-
-	return __udp4_lib_lookup(dev_net(skb->dev), iph->saddr, sport,
-				 iph->daddr, dport, inet_iif(skb),
-				 &udp_table, NULL);
+	return __udp4_lib_lookup_skb(skb, sport, dport, &udp_table);
 }
 EXPORT_SYMBOL_GPL(udp4_lib_lookup_skb);
 

@@ -237,7 +237,7 @@ static inline void bio_cnt_set(struct bio *bio, unsigned int count)
 {
 	if (count != 1) {
 		bio->bi_flags |= (1 << BIO_REFFED);
-		smp_mb();
+		smp_mb__before_atomic();
 	}
 	atomic_set(&bio->__bi_cnt, count);
 }

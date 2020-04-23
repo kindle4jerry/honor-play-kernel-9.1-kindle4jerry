@@ -90,9 +90,7 @@ static int sdhci_brcmstb_probe(struct platform_device *pdev)
 	host->mmc->caps2 |= MMC_CAP2_HC_ERASE_SZ;
 
 	sdhci_get_of_property(pdev);
-	res = mmc_of_parse(host->mmc);
-	if (res)
-		goto err;
+	mmc_of_parse(host->mmc);
 
 	/*
 	 * Supply the existing CAPS, but clear the UHS modes. This

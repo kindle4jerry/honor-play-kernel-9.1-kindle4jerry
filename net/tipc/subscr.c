@@ -356,7 +356,7 @@ static void *tipc_subscrb_connect_cb(int conid)
 	return (void *)tipc_subscrb_create(conid);
 }
 
-static int tipc_topsrv_start(struct net *net)
+int tipc_topsrv_start(struct net *net)
 {
 	struct tipc_net *tn = net_generic(net, tipc_net_id);
 	const char name[] = "topology_server";
@@ -394,7 +394,7 @@ static int tipc_topsrv_start(struct net *net)
 	return tipc_server_start(topsrv);
 }
 
-static void tipc_topsrv_stop(struct net *net)
+void tipc_topsrv_stop(struct net *net)
 {
 	struct tipc_net *tn = net_generic(net, tipc_net_id);
 	struct tipc_server *topsrv = tn->topsrv;
@@ -402,14 +402,4 @@ static void tipc_topsrv_stop(struct net *net)
 	tipc_server_stop(topsrv);
 	kfree(topsrv->saddr);
 	kfree(topsrv);
-}
-
-int __net_init tipc_topsrv_init_net(struct net *net)
-{
-	return tipc_topsrv_start(net);
-}
-
-void __net_exit tipc_topsrv_exit_net(struct net *net)
-{
-	tipc_topsrv_stop(net);
 }

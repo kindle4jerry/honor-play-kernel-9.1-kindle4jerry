@@ -387,9 +387,6 @@ static void output_poll_execute(struct work_struct *work)
 	enum drm_connector_status old_status;
 	bool repoll = false, changed;
 
-	if (!dev->mode_config.poll_enabled)
-		return;
-
 	/* Pick up any changes detected by the probe functions. */
 	changed = dev->mode_config.delayed_event;
 	dev->mode_config.delayed_event = false;
@@ -553,11 +550,7 @@ EXPORT_SYMBOL(drm_kms_helper_poll_init);
  */
 void drm_kms_helper_poll_fini(struct drm_device *dev)
 {
-	if (!dev->mode_config.poll_enabled)
-		return;
-
-	dev->mode_config.poll_enabled = false;
-	cancel_delayed_work_sync(&dev->mode_config.output_poll_work);
+	drm_kms_helper_poll_disable(dev);
 }
 EXPORT_SYMBOL(drm_kms_helper_poll_fini);
 

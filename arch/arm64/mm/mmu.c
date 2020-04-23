@@ -28,6 +28,8 @@
 #include <linux/memblock.h>
 #include <linux/fs.h>
 #include <linux/io.h>
+#include <linux/slab.h>
+#include <linux/stop_machine.h>
 #include <linux/mm.h>
 #include <linux/hisi/hisi_hkip.h>
 
@@ -95,17 +97,6 @@ static phys_addr_t __init early_pgtable_alloc(void)
 	return phys;
 }
 
-static bool pgattr_change_is_safe(u64 old, u64 new)
-{
-	/*
-	 * The following mapping attributes may be updated in live
-	 * kernel mappings without the need for break-before-make.
-	 */
-	static const pteval_t mask = PTE_PXN | PTE_RDONLY | PTE_WRITE;
-
-	return old  == 0 || new  == 0 || ((old ^ new) & ~mask) == 0;
-}
-
 static void alloc_init_pte(pmd_t *pmd, unsigned long addr,
 				  unsigned long end, unsigned long pfn,
 				  pgprot_t prot,
@@ -126,17 +117,8 @@ static void alloc_init_pte(pmd_t *pmd, unsigned long addr,
 
 	pte = pte_set_fixmap_offset(pmd, addr);
 	do {
-		pte_t old_pte = *pte;
-
 		set_pte(pte, pfn_pte(pfn, prot));
 		pfn++;
-
-		/*
-		 * After the PTE entry has been populated once, we
-		 * only allow updates to the permission attributes.
-		 */
-		BUG_ON(!pgattr_change_is_safe(pte_val(old_pte), pte_val(*pte)));
-
 	} while (pte++, addr += PAGE_SIZE, addr != end);
 
 	pte_clear_fixmap();
@@ -166,27 +148,27 @@ static void alloc_init_pmd(pud_t *pud, unsigned long addr, unsigned long end,
 
 	pmd = pmd_set_fixmap_offset(pud, addr);
 	do {
-		pmd_t old_pmd = *pmd;
-
 		next = pmd_addr_end(addr, end);
-
 		/* try section mapping first */
 		if (((addr | next | phys) & ~SECTION_MASK) == 0 &&
 		      allow_block_mappings) {
+			pmd_t old_pmd =*pmd;
 			pmd_set_huge(pmd, phys, prot);
-
 			/*
-			 * After the PMD entry has been populated once, we
-			 * only allow updates to the permission attributes.
+			 * Check for previous table entries created during
+			 * boot (__create_page_tables) and flush them.
 			 */
-			BUG_ON(!pgattr_change_is_safe(pmd_val(old_pmd),
-						      pmd_val(*pmd)));
+			if (!pmd_none(old_pmd)) {
+				flush_tlb_all();
+				if (pmd_table(old_pmd)) {
+					phys_addr_t table = pmd_page_paddr(old_pmd);
+					if (!WARN_ON_ONCE(slab_is_available()))
+						memblock_free(table, PAGE_SIZE);
+				}
+			}
 		} else {
 			alloc_init_pte(pmd, addr, next, __phys_to_pfn(phys),
 				       prot, pgtable_alloc);
-
-			BUG_ON(pmd_val(old_pmd) != 0 &&
-			       pmd_val(old_pmd) != pmd_val(*pmd));
 		}
 		phys += next - addr;
 	} while (pmd++, addr = next, addr != end);
@@ -224,28 +206,33 @@ static void alloc_init_pud(pgd_t *pgd, unsigned long addr, unsigned long end,
 
 	pud = pud_set_fixmap_offset(pgd, addr);
 	do {
-		pud_t old_pud = *pud;
-
 		next = pud_addr_end(addr, end);
 
 		/*
 		 * For 4K granule only, attempt to put down a 1GB block
 		 */
 		if (use_1G_block(addr, next, phys) && allow_block_mappings) {
+			pud_t old_pud = *pud;
 			pud_set_huge(pud, phys, prot);
 
 			/*
-			 * After the PUD entry has been populated once, we
-			 * only allow updates to the permission attributes.
+			 * If we have an old value for a pud, it will
+			 * be pointing to a pmd table that we no longer
+			 * need (from swapper_pg_dir).
+			 *
+			 * Look up the old pmd table and free it.
 			 */
-			BUG_ON(!pgattr_change_is_safe(pud_val(old_pud),
-						      pud_val(*pud)));
+			if (!pud_none(old_pud)) {
+				flush_tlb_all();
+				if (pud_table(old_pud)) {
+					phys_addr_t table = pud_page_paddr(old_pud);
+					if (!WARN_ON_ONCE(slab_is_available()))
+						memblock_free(table, PAGE_SIZE);
+				}
+			}
 		} else {
 			alloc_init_pmd(pud, addr, next, phys, prot,
 				       pgtable_alloc, allow_block_mappings);
-
-			BUG_ON(pud_val(old_pud) != 0 &&
-			       pud_val(old_pud) != pud_val(*pud));
 		}
 		phys += next - addr;
 	} while (pud++, addr = next, addr != end);
@@ -413,9 +400,6 @@ void mark_rodata_ro(void)
 	hkip_register_ro((void *)__start_data_ro_after_init,
 			 ALIGN(section_size, PAGE_SIZE));
 
-	/* flush the TLBs after updating live kernel mappings */
-	flush_tlb_all();
-
 }
 
 #ifdef CONFIG_DEBUG_HISI_EARLY_RODATA_PROTECTION
@@ -527,8 +511,8 @@ static void __init map_kernel(pgd_t *pgd)
 		 * entry instead.
 		 */
 		BUG_ON(!IS_ENABLED(CONFIG_ARM64_16K_PAGES));
-		pud_populate(&init_mm, pud_set_fixmap_offset(pgd, FIXADDR_START),
-			     lm_alias(bm_pmd));
+		set_pud(pud_set_fixmap_offset(pgd, FIXADDR_START),
+			__pud(__pa_symbol(bm_pmd) | PUD_TYPE_TABLE));
 		pud_clear_fixmap();
 	} else {
 		BUG();
@@ -646,7 +630,7 @@ int __meminit vmemmap_populate(unsigned long start, unsigned long end, int node)
 			if (!p)
 				return -ENOMEM;
 
-			pmd_set_huge(pmd, __pa(p), __pgprot(PROT_SECT_NORMAL));
+			set_pmd(pmd, __pmd(__pa(p) | PROT_SECT_NORMAL));
 		} else
 			vmemmap_verify((pte_t *)pmd, node, addr, next);
 	} while (addr = next, addr != end);
@@ -824,49 +808,26 @@ void *__init fixmap_remap_fdt(phys_addr_t dt_phys)
 
 int __init arch_ioremap_pud_supported(void)
 {
-	/*
-	 * Only 4k granule supports level 1 block mappings.
-	 * SW table walks can't handle removal of intermediate entries.
-	 */
-	return IS_ENABLED(CONFIG_ARM64_4K_PAGES) &&
-	       !IS_ENABLED(CONFIG_ARM64_PTDUMP_DEBUGFS);
+	/* only 4k granule supports level 1 block mappings */
+	return IS_ENABLED(CONFIG_ARM64_4K_PAGES);
 }
 
 int __init arch_ioremap_pmd_supported(void)
 {
-	/* See arch_ioremap_pud_supported() */
-	return !IS_ENABLED(CONFIG_ARM64_PTDUMP_DEBUGFS);
-}
-
-int pud_set_huge(pud_t *pudp, phys_addr_t phys, pgprot_t prot)
-{
-	pgprot_t sect_prot = __pgprot(PUD_TYPE_SECT |
-					pgprot_val(mk_sect_prot(prot)));
-	pud_t new_pud = pfn_pud(__phys_to_pfn(phys), sect_prot);
-
-	/* Only allow permission changes for now */
-	if (!pgattr_change_is_safe(READ_ONCE(pud_val(*pudp)),
-				   pud_val(new_pud)))
-		return 0;
-
-	BUG_ON(phys & ~PUD_MASK);
-	set_pud(pudp, new_pud);
 	return 1;
 }
 
-int pmd_set_huge(pmd_t *pmdp, phys_addr_t phys, pgprot_t prot)
+int pud_set_huge(pud_t *pud, phys_addr_t phys, pgprot_t prot)
 {
-	pgprot_t sect_prot = __pgprot(PMD_TYPE_SECT |
-					pgprot_val(mk_sect_prot(prot)));
-	pmd_t new_pmd = pfn_pmd(__phys_to_pfn(phys), sect_prot);
+	BUG_ON(phys & ~PUD_MASK);
+	set_pud(pud, __pud(phys | PUD_TYPE_SECT | pgprot_val(mk_sect_prot(prot))));
+	return 1;
+}
 
-	/* Only allow permission changes for now */
-	if (!pgattr_change_is_safe(READ_ONCE(pmd_val(*pmdp)),
-				   pmd_val(new_pmd)))
-		return 0;
-
+int pmd_set_huge(pmd_t *pmd, phys_addr_t phys, pgprot_t prot)
+{
 	BUG_ON(phys & ~PMD_MASK);
-	set_pmd(pmdp, new_pmd);
+	set_pmd(pmd, __pmd(phys | PMD_TYPE_SECT | pgprot_val(mk_sect_prot(prot))));
 	return 1;
 }
 

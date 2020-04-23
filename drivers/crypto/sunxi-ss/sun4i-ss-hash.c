@@ -250,10 +250,7 @@ static int sun4i_hash(struct ahash_request *areq)
 		}
 	} else {
 		/* Since we have the flag final, we can go up to modulo 4 */
-		if (areq->nbytes < 4)
-			end = 0;
-		else
-			end = ((areq->nbytes + op->len) / 4) * 4 - op->len;
+		end = ((areq->nbytes + op->len) / 4) * 4 - op->len;
 	}
 
 	/* TODO if SGlen % 4 and op->len == 0 then DMA */
@@ -286,8 +283,8 @@ static int sun4i_hash(struct ahash_request *areq)
 			 */
 			while (op->len < 64 && i < end) {
 				/* how many bytes we can read from current SG */
-				in_r = min(end - i, 64 - op->len);
-				in_r = min_t(size_t, mi.length - in_i, in_r);
+				in_r = min3(mi.length - in_i, end - i,
+					    64 - op->len);
 				memcpy(op->buf + op->len, mi.addr + in_i, in_r);
 				op->len += in_r;
 				i += in_r;
@@ -307,8 +304,8 @@ static int sun4i_hash(struct ahash_request *areq)
 		}
 		if (mi.length - in_i > 3 && i < end) {
 			/* how many bytes we can read from current SG */
-			in_r = min_t(size_t, mi.length - in_i, areq->nbytes - i);
-			in_r = min_t(size_t, ((mi.length - in_i) / 4) * 4, in_r);
+			in_r = min3(mi.length - in_i, areq->nbytes - i,
+				    ((mi.length - in_i) / 4) * 4);
 			/* how many bytes we can write in the device*/
 			todo = min3((u32)(end - i) / 4, rx_cnt, (u32)in_r / 4);
 			writesl(ss->base + SS_RXFIFO, mi.addr + in_i, todo);
@@ -334,8 +331,8 @@ static int sun4i_hash(struct ahash_request *areq)
 	if ((areq->nbytes - i) < 64) {
 		while (i < areq->nbytes && in_i < mi.length && op->len < 64) {
 			/* how many bytes we can read from current SG */
-			in_r = min(areq->nbytes - i, 64 - op->len);
-			in_r = min_t(size_t, mi.length - in_i, in_r);
+			in_r = min3(mi.length - in_i, areq->nbytes - i,
+				    64 - op->len);
 			memcpy(op->buf + op->len, mi.addr + in_i, in_r);
 			op->len += in_r;
 			i += in_r;

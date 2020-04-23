@@ -135,7 +135,6 @@ struct etnaviv_gpu {
 	int irq;
 
 	struct etnaviv_iommu *mmu;
-	unsigned int flush_seq;
 
 	/* Power Control: */
 	struct clk *clk_bus;

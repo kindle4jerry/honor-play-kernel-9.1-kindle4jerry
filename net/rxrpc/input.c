@@ -577,7 +577,8 @@ ack:
 				  immediate_ack, true,
 				  rxrpc_propose_ack_input_data);
 
-	rxrpc_notify_socket(call);
+	if (sp->hdr.seq == READ_ONCE(call->rx_hard_ack) + 1)
+		rxrpc_notify_socket(call);
 	_leave(" [queued]");
 }
 

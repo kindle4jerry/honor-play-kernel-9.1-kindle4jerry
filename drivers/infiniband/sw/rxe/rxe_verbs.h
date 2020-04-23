@@ -209,7 +209,6 @@ struct rxe_resp_info {
 	struct rxe_mem		*mr;
 	u32			resid;
 	u32			rkey;
-	u32			length;
 	u64			atomic_orig;
 
 	/* SRQ only */
@@ -422,7 +421,7 @@ struct rxe_dev {
 	struct list_head	pending_mmaps;
 
 	spinlock_t		mmap_offset_lock; /* guard mmap_offset */
-	u64			mmap_offset;
+	int			mmap_offset;
 
 	struct rxe_port		port;
 	struct list_head	list;

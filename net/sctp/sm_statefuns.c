@@ -179,16 +179,6 @@ sctp_chunk_length_valid(struct sctp_chunk *chunk,
 	return 1;
 }
 
-/* Check for format error in an ABORT chunk */
-static inline bool sctp_err_chunk_valid(struct sctp_chunk *chunk)
-{
-	struct sctp_errhdr *err;
-
-	sctp_walk_errors(err, chunk->chunk_hdr);
-
-	return (void *)err == (void *)chunk->chunk_end;
-}
-
 /**********************************************************
  * These are the state functions for handling chunk events.
  **********************************************************/
@@ -2158,9 +2148,6 @@ sctp_disposition_t sctp_sf_shutdown_pending_abort(
 		    sctp_bind_addr_state(&asoc->base.bind_addr, &chunk->dest))
 		return sctp_sf_discard_chunk(net, ep, asoc, type, arg, commands);
 
-	if (!sctp_err_chunk_valid(chunk))
-		return sctp_sf_pdiscard(net, ep, asoc, type, arg, commands);
-
 	return __sctp_sf_do_9_1_abort(net, ep, asoc, type, arg, commands);
 }
 
@@ -2202,9 +2189,6 @@ sctp_disposition_t sctp_sf_shutdown_sent_abort(struct net *net,
 	if (SCTP_ADDR_DEL ==
 		    sctp_bind_addr_state(&asoc->base.bind_addr, &chunk->dest))
 		return sctp_sf_discard_chunk(net, ep, asoc, type, arg, commands);
-
-	if (!sctp_err_chunk_valid(chunk))
-		return sctp_sf_pdiscard(net, ep, asoc, type, arg, commands);
 
 	/* Stop the T2-shutdown timer. */
 	sctp_add_cmd_sf(commands, SCTP_CMD_TIMER_STOP,
@@ -2471,9 +2455,6 @@ sctp_disposition_t sctp_sf_do_9_1_abort(struct net *net,
 		    sctp_bind_addr_state(&asoc->base.bind_addr, &chunk->dest))
 		return sctp_sf_discard_chunk(net, ep, asoc, type, arg, commands);
 
-	if (!sctp_err_chunk_valid(chunk))
-		return sctp_sf_pdiscard(net, ep, asoc, type, arg, commands);
-
 	return __sctp_sf_do_9_1_abort(net, ep, asoc, type, arg, commands);
 }
 
@@ -2490,9 +2471,15 @@ static sctp_disposition_t __sctp_sf_do_9_1_abort(struct net *net,
 
 	/* See if we have an error cause code in the chunk.  */
 	len = ntohs(chunk->chunk_hdr->length);
+	if (len >= sizeof(struct sctp_chunkhdr) + sizeof(struct sctp_errhdr)) {
 
-	if (len >= sizeof(struct sctp_chunkhdr) + sizeof(struct sctp_errhdr))
+		sctp_errhdr_t *err;
+		sctp_walk_errors(err, chunk->chunk_hdr);
+		if ((void *)err != (void *)chunk->chunk_end)
+			return sctp_sf_pdiscard(net, ep, asoc, type, arg, commands);
+
 		error = ((sctp_errhdr_t *)chunk->skb->data)->cause;
+	}
 
 	sctp_add_cmd_sf(commands, SCTP_CMD_SET_SK_ERR, SCTP_ERROR(ECONNRESET));
 	/* ASSOC_FAILED will DELETE_TCB. */

@@ -195,9 +195,9 @@ EXPORT_SYMBOL(generic_pipe_buf_steal);
  *	in the tee() system call, when we duplicate the buffers in one
  *	pipe into another.
  */
-bool generic_pipe_buf_get(struct pipe_inode_info *pipe, struct pipe_buffer *buf)
+void generic_pipe_buf_get(struct pipe_inode_info *pipe, struct pipe_buffer *buf)
 {
-	return try_get_page(buf->page);
+	get_page(buf->page);
 }
 EXPORT_SYMBOL(generic_pipe_buf_get);
 
@@ -240,14 +240,6 @@ static const struct pipe_buf_operations anon_pipe_buf_ops = {
 	.get = generic_pipe_buf_get,
 };
 
-static const struct pipe_buf_operations anon_pipe_buf_nomerge_ops = {
-	.can_merge = 0,
-	.confirm = generic_pipe_buf_confirm,
-	.release = anon_pipe_buf_release,
-	.steal = anon_pipe_buf_steal,
-	.get = generic_pipe_buf_get,
-};
-
 static const struct pipe_buf_operations packet_pipe_buf_ops = {
 	.can_merge = 0,
 	.confirm = generic_pipe_buf_confirm,
@@ -255,12 +247,6 @@ static const struct pipe_buf_operations packet_pipe_buf_ops = {
 	.steal = anon_pipe_buf_steal,
 	.get = generic_pipe_buf_get,
 };
-
-void pipe_buf_mark_unmergeable(struct pipe_buffer *buf)
-{
-	if (buf->ops == &anon_pipe_buf_ops)
-		buf->ops = &anon_pipe_buf_nomerge_ops;
-}
 
 static ssize_t
 pipe_read(struct kiocb *iocb, struct iov_iter *to)

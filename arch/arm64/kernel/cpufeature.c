@@ -165,8 +165,8 @@ static const struct arm64_ftr_bits ftr_ctr[] = {
 	ARM64_FTR_BITS(FTR_STRICT, FTR_EXACT, 30, 1, 0),
 	ARM64_FTR_BITS(FTR_STRICT, FTR_LOWER_SAFE, CTR_DIC_SHIFT, 1, 1),	/* DIC */
 	ARM64_FTR_BITS(FTR_STRICT, FTR_LOWER_SAFE, CTR_IDC_SHIFT, 1, 1),	/* IDC */
-	ARM64_FTR_BITS(FTR_STRICT, FTR_HIGHER_OR_ZERO_SAFE, 24, 4, 0),	/* CWG */
-	ARM64_FTR_BITS(FTR_STRICT, FTR_HIGHER_OR_ZERO_SAFE, 20, 4, 0),	/* ERG */
+	ARM64_FTR_BITS(FTR_STRICT, FTR_HIGHER_SAFE, 24, 4, 0),	/* CWG */
+	ARM64_FTR_BITS(FTR_STRICT, FTR_HIGHER_SAFE, 20, 4, 0),	/* ERG */
 	ARM64_FTR_BITS(FTR_STRICT, FTR_LOWER_SAFE, 16, 4, 1),	/* DminLine */
 	/*
 	 * Linux can handle differing I-cache policies. Userspace JITs will
@@ -405,10 +405,6 @@ static s64 arm64_ftr_safe_value(const struct arm64_ftr_bits *ftrp, s64 new,
 	case FTR_LOWER_SAFE:
 		ret = new < cur ? new : cur;
 		break;
-	case FTR_HIGHER_OR_ZERO_SAFE:
-		if (!cur || !new)
-			break;
-		/* Fallthrough */
 	case FTR_HIGHER_SAFE:
 		ret = new > cur ? new : cur;
 		break;
@@ -850,11 +846,6 @@ static bool unmap_kernel_at_el0(const struct arm64_cpu_capabilities *entry,
 	switch (read_cpuid_id() & MIDR_CPU_MODEL_MASK) {
 	case MIDR_CAVIUM_THUNDERX2:
 	case MIDR_BRCM_VULCAN:
-	case MIDR_CORTEX_A53:
-	case MIDR_CORTEX_A55:
-	case MIDR_CORTEX_A57:
-	case MIDR_CORTEX_A72:
-	case MIDR_CORTEX_A73:
 		return false;
 	}
 

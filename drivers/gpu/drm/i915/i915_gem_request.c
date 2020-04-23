@@ -558,10 +558,6 @@ static void i915_gem_mark_busy(const struct intel_engine_cs *engine)
 		return;
 
 	intel_runtime_pm_get_noresume(dev_priv);
-
-	if (NEEDS_RC6_CTX_CORRUPTION_WA(dev_priv))
-		intel_uncore_forcewake_get(dev_priv, FORCEWAKE_ALL);
-
 	dev_priv->gt.awake = true;
 
 	intel_enable_gt_powersave(dev_priv);

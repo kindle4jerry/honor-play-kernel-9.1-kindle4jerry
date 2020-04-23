@@ -598,7 +598,6 @@ static ssize_t n_hdlc_tty_read(struct tty_struct *tty, struct file *file,
 				/* too large for caller's buffer */
 				ret = -EOVERFLOW;
 			} else {
-				__set_current_state(TASK_RUNNING);
 				if (copy_to_user(buf, rbuf->buf, rbuf->count))
 					ret = -EFAULT;
 				else
@@ -614,7 +613,7 @@ static ssize_t n_hdlc_tty_read(struct tty_struct *tty, struct file *file,
 		}
 			
 		/* no data */
-		if (tty_io_nonblock(tty, file)) {
+		if (file->f_flags & O_NONBLOCK) {
 			ret = -EAGAIN;
 			break;
 		}
@@ -681,7 +680,7 @@ static ssize_t n_hdlc_tty_write(struct tty_struct *tty, struct file *file,
 		if (tbuf)
 			break;
 
-		if (tty_io_nonblock(tty, file)) {
+		if (file->f_flags & O_NONBLOCK) {
 			error = -EAGAIN;
 			break;
 		}

@@ -3168,7 +3168,7 @@ static int hwsim_get_radio_nl(struct sk_buff *msg, struct genl_info *info)
 			goto out_err;
 		}
 
-		res = genlmsg_reply(skb, info);
+		genlmsg_reply(skb, info);
 		break;
 	}
 

@@ -415,10 +415,6 @@ int nfc_llcp_send_connect(struct nfc_llcp_sock *sock)
 						      sock->service_name,
 						      sock->service_name_len,
 						      &service_name_tlv_length);
-		if (!service_name_tlv) {
-			err = -ENOMEM;
-			goto error_tlv;
-		}
 		size += service_name_tlv_length;
 	}
 
@@ -429,17 +425,9 @@ int nfc_llcp_send_connect(struct nfc_llcp_sock *sock)
 
 	miux_tlv = nfc_llcp_build_tlv(LLCP_TLV_MIUX, (u8 *)&miux, 0,
 				      &miux_tlv_length);
-	if (!miux_tlv) {
-		err = -ENOMEM;
-		goto error_tlv;
-	}
 	size += miux_tlv_length;
 
 	rw_tlv = nfc_llcp_build_tlv(LLCP_TLV_RW, &rw, 0, &rw_tlv_length);
-	if (!rw_tlv) {
-		err = -ENOMEM;
-		goto error_tlv;
-	}
 	size += rw_tlv_length;
 
 	pr_debug("SKB size %d SN length %zu\n", size, sock->service_name_len);
@@ -492,17 +480,9 @@ int nfc_llcp_send_cc(struct nfc_llcp_sock *sock)
 
 	miux_tlv = nfc_llcp_build_tlv(LLCP_TLV_MIUX, (u8 *)&miux, 0,
 				      &miux_tlv_length);
-	if (!miux_tlv) {
-		err = -ENOMEM;
-		goto error_tlv;
-	}
 	size += miux_tlv_length;
 
 	rw_tlv = nfc_llcp_build_tlv(LLCP_TLV_RW, &rw, 0, &rw_tlv_length);
-	if (!rw_tlv) {
-		err = -ENOMEM;
-		goto error_tlv;
-	}
 	size += rw_tlv_length;
 
 	skb = llcp_allocate_pdu(sock, LLCP_PDU_CC, size);

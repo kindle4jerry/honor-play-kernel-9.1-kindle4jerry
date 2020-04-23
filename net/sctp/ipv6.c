@@ -97,9 +97,10 @@ static int sctp_inet6addr_event(struct notifier_block *this, unsigned long ev,
 
 	switch (ev) {
 	case NETDEV_UP:
-		addr = kzalloc(sizeof(*addr), GFP_ATOMIC);
+		addr = kmalloc(sizeof(struct sctp_sockaddr_entry), GFP_ATOMIC);
 		if (addr) {
 			addr->a.v6.sin6_family = AF_INET6;
+			addr->a.v6.sin6_port = 0;
 			addr->a.v6.sin6_addr = ifa->addr;
 			addr->a.v6.sin6_scope_id = ifa->idev->dev->ifindex;
 			addr->valid = 1;
@@ -235,8 +236,7 @@ static void sctp_v6_get_dst(struct sctp_transport *t, union sctp_addr *saddr,
 {
 	struct sctp_association *asoc = t->asoc;
 	struct dst_entry *dst = NULL;
-	struct flowi _fl;
-	struct flowi6 *fl6 = &_fl.u.ip6;
+	struct flowi6 *fl6 = &fl->u.ip6;
 	struct sctp_bind_addr *bp;
 	struct ipv6_pinfo *np = inet6_sk(sk);
 	struct sctp_sockaddr_entry *laddr;
@@ -246,7 +246,7 @@ static void sctp_v6_get_dst(struct sctp_transport *t, union sctp_addr *saddr,
 	__u8 matchlen = 0;
 	sctp_scope_t scope;
 
-	memset(&_fl, 0, sizeof(_fl));
+	memset(fl6, 0, sizeof(struct flowi6));
 	fl6->daddr = daddr->v6.sin6_addr;
 	fl6->fl6_dport = daddr->v6.sin6_port;
 	fl6->flowi6_proto = IPPROTO_SCTP;
@@ -270,11 +270,8 @@ static void sctp_v6_get_dst(struct sctp_transport *t, union sctp_addr *saddr,
 	rcu_read_unlock();
 
 	dst = ip6_dst_lookup_flow(sk, fl6, final_p);
-	if (!asoc || saddr) {
-		t->dst = dst;
-		memcpy(fl, &_fl, sizeof(_fl));
+	if (!asoc || saddr)
 		goto out;
-	}
 
 	bp = &asoc->base.bind_addr;
 	scope = sctp_scope(daddr);
@@ -297,8 +294,6 @@ static void sctp_v6_get_dst(struct sctp_transport *t, union sctp_addr *saddr,
 			if ((laddr->a.sa.sa_family == AF_INET6) &&
 			    (sctp_v6_cmp_addr(&dst_saddr, &laddr->a))) {
 				rcu_read_unlock();
-				t->dst = dst;
-				memcpy(fl, &_fl, sizeof(_fl));
 				goto out;
 			}
 		}
@@ -335,8 +330,6 @@ static void sctp_v6_get_dst(struct sctp_transport *t, union sctp_addr *saddr,
 			if (!IS_ERR_OR_NULL(dst))
 				dst_release(dst);
 			dst = bdst;
-			t->dst = dst;
-			memcpy(fl, &_fl, sizeof(_fl));
 			break;
 		}
 
@@ -348,8 +341,6 @@ static void sctp_v6_get_dst(struct sctp_transport *t, union sctp_addr *saddr,
 			dst_release(dst);
 		dst = bdst;
 		matchlen = bmatchlen;
-		t->dst = dst;
-		memcpy(fl, &_fl, sizeof(_fl));
 	}
 	rcu_read_unlock();
 
@@ -358,12 +349,14 @@ out:
 		struct rt6_info *rt;
 
 		rt = (struct rt6_info *)dst;
+		t->dst = dst;
 		t->dst_cookie = rt6_get_cookie(rt);
 		pr_debug("rt6_dst:%pI6/%d rt6_src:%pI6\n",
 			 &rt->rt6i_dst.addr, rt->rt6i_dst.plen,
-			 &fl->u.ip6.saddr);
+			 &fl6->saddr);
 	} else {
 		t->dst = NULL;
+
 		pr_debug("no route\n");
 	}
 }
@@ -415,6 +408,7 @@ static void sctp_v6_copy_addrlist(struct list_head *addrlist,
 		addr = kzalloc(sizeof(*addr), GFP_ATOMIC);
 		if (addr) {
 			addr->a.v6.sin6_family = AF_INET6;
+			addr->a.v6.sin6_port = 0;
 			addr->a.v6.sin6_addr = ifp->addr;
 			addr->a.v6.sin6_scope_id = dev->ifindex;
 			addr->valid = 1;
@@ -972,7 +966,7 @@ static const struct proto_ops inet6_seqpacket_ops = {
 	.owner		   = THIS_MODULE,
 	.release	   = inet6_release,
 	.bind		   = inet6_bind,
-	.connect	   = sctp_inet_connect,
+	.connect	   = inet_dgram_connect,
 	.socketpair	   = sock_no_socketpair,
 	.accept		   = inet_accept,
 	.getname	   = sctp_getname,

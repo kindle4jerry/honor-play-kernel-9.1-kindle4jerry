@@ -28,7 +28,6 @@
 #include <linux/export.h>
 #include <linux/math64.h>
 #include <linux/slab.h>
-#include <linux/nospec.h>
 #include <asm/processor.h>
 #include <asm/msr.h>
 #include <asm/page.h>
@@ -524,11 +523,9 @@ static inline bool pv_eoi_enabled(struct kvm_vcpu *vcpu)
 static bool pv_eoi_get_pending(struct kvm_vcpu *vcpu)
 {
 	u8 val;
-	if (pv_eoi_get_user(vcpu, &val) < 0) {
+	if (pv_eoi_get_user(vcpu, &val) < 0)
 		apic_debug("Can't read EOI MSR value: 0x%llx\n",
 			   (unsigned long long)vcpu->arch.pv_eoi.msr_val);
-		return false;
-	}
 	return val & 0x1;
 }
 
@@ -1572,20 +1569,15 @@ int kvm_lapic_reg_write(struct kvm_lapic *apic, u32 reg, u32 val)
 	case APIC_LVTTHMR:
 	case APIC_LVTPC:
 	case APIC_LVT1:
-	case APIC_LVTERR: {
+	case APIC_LVTERR:
 		/* TODO: Check vector */
-		size_t size;
-		u32 index;
-
 		if (!kvm_apic_sw_enabled(apic))
 			val |= APIC_LVT_MASKED;
-		size = ARRAY_SIZE(apic_lvt_mask);
-		index = array_index_nospec(
-				(reg - APIC_LVTT) >> 4, size);
-		val &= apic_lvt_mask[index];
+
+		val &= apic_lvt_mask[(reg - APIC_LVTT) >> 4];
 		kvm_lapic_set_reg(apic, reg, val);
+
 		break;
-	}
 
 	case APIC_LVTT:
 		if (!kvm_apic_sw_enabled(apic))
@@ -1974,7 +1966,7 @@ int kvm_apic_has_interrupt(struct kvm_vcpu *vcpu)
 	struct kvm_lapic *apic = vcpu->arch.apic;
 	int highest_irr;
 
-	if (!kvm_apic_hw_enabled(apic))
+	if (!apic_enabled(apic))
 		return -1;
 
 	apic_update_ppr(apic);

@@ -1078,7 +1078,7 @@ static int bcmgenet_power_down(struct bcmgenet_priv *priv,
 		break;
 	}
 
-	return ret;
+	return 0;
 }
 
 static void bcmgenet_power_up(struct bcmgenet_priv *priv,
@@ -1914,8 +1914,6 @@ static void bcmgenet_link_intr_enable(struct bcmgenet_priv *priv)
 	 */
 	if (priv->internal_phy) {
 		int0_enable |= UMAC_IRQ_LINK_EVENT;
-		if (GENET_IS_V1(priv) || GENET_IS_V2(priv) || GENET_IS_V3(priv))
-			int0_enable |= UMAC_IRQ_PHY_DET_R;
 	} else if (priv->ext_phy) {
 		int0_enable |= UMAC_IRQ_LINK_EVENT;
 	} else if (priv->phy_interface == PHY_INTERFACE_MODE_MOCA) {
@@ -2533,10 +2531,6 @@ static void bcmgenet_irq_task(struct work_struct *work)
 		bcmgenet_power_up(priv, GENET_POWER_WOL_MAGIC);
 	}
 
-	if (status & UMAC_IRQ_PHY_DET_R &&
-	    priv->dev->phydev->autoneg != AUTONEG_ENABLE)
-		phy_init_hw(priv->dev->phydev);
-
 	/* Link UP/DOWN event */
 	if (status & UMAC_IRQ_LINK_EVENT)
 		phy_mac_interrupt(priv->phydev,
@@ -2633,7 +2627,8 @@ static irqreturn_t bcmgenet_isr0(int irq, void *dev_id)
 	}
 
 	/* all other interested interrupts handled in bottom half */
-	status &= (UMAC_IRQ_LINK_EVENT | UMAC_IRQ_MPD_R | UMAC_IRQ_PHY_DET_R);
+	status &= (UMAC_IRQ_LINK_EVENT |
+		   UMAC_IRQ_MPD_R);
 	if (status) {
 		/* Save irq status for bottom-half processing. */
 		spin_lock_irqsave(&priv->lock, flags);
@@ -3007,42 +3002,39 @@ static void bcmgenet_timeout(struct net_device *dev)
 	netif_tx_wake_all_queues(dev);
 }
 
-#define MAX_MDF_FILTER	17
+#define MAX_MC_COUNT	16
 
 static inline void bcmgenet_set_mdf_addr(struct bcmgenet_priv *priv,
 					 unsigned char *addr,
-					 int *i)
+					 int *i,
+					 int *mc)
 {
+	u32 reg;
+
 	bcmgenet_umac_writel(priv, addr[0] << 8 | addr[1],
 			     UMAC_MDF_ADDR + (*i * 4));
 	bcmgenet_umac_writel(priv, addr[2] << 24 | addr[3] << 16 |
 			     addr[4] << 8 | addr[5],
 			     UMAC_MDF_ADDR + ((*i + 1) * 4));
+	reg = bcmgenet_umac_readl(priv, UMAC_MDF_CTRL);
+	reg |= (1 << (MAX_MC_COUNT - *mc));
+	bcmgenet_umac_writel(priv, reg, UMAC_MDF_CTRL);
 	*i += 2;
+	(*mc)++;
 }
 
 static void bcmgenet_set_rx_mode(struct net_device *dev)
 {
 	struct bcmgenet_priv *priv = netdev_priv(dev);
 	struct netdev_hw_addr *ha;
-	int i, nfilter;
+	int i, mc;
 	u32 reg;
 
 	netif_dbg(priv, hw, dev, "%s: %08X\n", __func__, dev->flags);
 
-	/* Number of filters needed */
-	nfilter = netdev_uc_count(dev) + netdev_mc_count(dev) + 2;
-
-	/*
-	 * Turn on promicuous mode for three scenarios
-	 * 1. IFF_PROMISC flag is set
-	 * 2. IFF_ALLMULTI flag is set
-	 * 3. The number of filters needed exceeds the number filters
-	 *    supported by the hardware.
-	*/
+	/* Promiscuous mode */
 	reg = bcmgenet_umac_readl(priv, UMAC_CMD);
-	if ((dev->flags & (IFF_PROMISC | IFF_ALLMULTI)) ||
-	    (nfilter > MAX_MDF_FILTER)) {
+	if (dev->flags & IFF_PROMISC) {
 		reg |= CMD_PROMISC;
 		bcmgenet_umac_writel(priv, reg, UMAC_CMD);
 		bcmgenet_umac_writel(priv, 0, UMAC_MDF_CTRL);
@@ -3052,24 +3044,32 @@ static void bcmgenet_set_rx_mode(struct net_device *dev)
 		bcmgenet_umac_writel(priv, reg, UMAC_CMD);
 	}
 
+	/* UniMac doesn't support ALLMULTI */
+	if (dev->flags & IFF_ALLMULTI) {
+		netdev_warn(dev, "ALLMULTI is not supported\n");
+		return;
+	}
+
 	/* update MDF filter */
 	i = 0;
+	mc = 0;
 	/* Broadcast */
-	bcmgenet_set_mdf_addr(priv, dev->broadcast, &i);
+	bcmgenet_set_mdf_addr(priv, dev->broadcast, &i, &mc);
 	/* my own address.*/
-	bcmgenet_set_mdf_addr(priv, dev->dev_addr, &i);
+	bcmgenet_set_mdf_addr(priv, dev->dev_addr, &i, &mc);
+	/* Unicast list*/
+	if (netdev_uc_count(dev) > (MAX_MC_COUNT - mc))
+		return;
 
-	/* Unicast */
-	netdev_for_each_uc_addr(ha, dev)
-		bcmgenet_set_mdf_addr(priv, ha->addr, &i);
-
+	if (!netdev_uc_empty(dev))
+		netdev_for_each_uc_addr(ha, dev)
+			bcmgenet_set_mdf_addr(priv, ha->addr, &i, &mc);
 	/* Multicast */
-	netdev_for_each_mc_addr(ha, dev)
-		bcmgenet_set_mdf_addr(priv, ha->addr, &i);
+	if (netdev_mc_empty(dev) || netdev_mc_count(dev) >= (MAX_MC_COUNT - mc))
+		return;
 
-	/* Enable filters */
-	reg = GENMASK(MAX_MDF_FILTER - 1, MAX_MDF_FILTER - nfilter);
-	bcmgenet_umac_writel(priv, reg, UMAC_MDF_CTRL);
+	netdev_for_each_mc_addr(ha, dev)
+		bcmgenet_set_mdf_addr(priv, ha->addr, &i, &mc);
 }
 
 /* Set the hardware MAC address. */

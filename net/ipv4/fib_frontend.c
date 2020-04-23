@@ -193,7 +193,7 @@ static void fib_flush(struct net *net)
 		struct fib_table *tb;
 
 		hlist_for_each_entry_safe(tb, tmp, head, tb_hlist)
-			flushed += fib_table_flush(net, tb, false);
+			flushed += fib_table_flush(net, tb);
 	}
 
 	if (flushed)
@@ -1278,7 +1278,7 @@ static void ip_fib_net_exit(struct net *net)
 
 		hlist_for_each_entry_safe(tb, tmp, head, tb_hlist) {
 			hlist_del(&tb->tb_hlist);
-			fib_table_flush(net, tb, true);
+			fib_table_flush(net, tb);
 			fib_free_table(tb);
 		}
 	}

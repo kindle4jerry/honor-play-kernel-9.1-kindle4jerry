@@ -51,7 +51,6 @@ struct list_lru {
 	struct list_lru_node	*node;
 #if defined(CONFIG_MEMCG) && !defined(CONFIG_SLOB)
 	struct list_head	list;
-	bool			memcg_aware;
 #endif
 };
 

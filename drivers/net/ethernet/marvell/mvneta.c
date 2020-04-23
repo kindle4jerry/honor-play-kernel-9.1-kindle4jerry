@@ -2049,7 +2049,7 @@ err_drop_frame:
 			if (unlikely(!skb))
 				goto err_drop_frame_ret_pool;
 
-			dma_sync_single_range_for_cpu(&pp->bm_priv->pdev->dev,
+			dma_sync_single_range_for_cpu(dev->dev.parent,
 			                              rx_desc->buf_phys_addr,
 			                              MVNETA_MH_SIZE + NET_SKB_PAD,
 			                              rx_bytes,
@@ -2689,9 +2689,10 @@ static int mvneta_poll(struct napi_struct *napi, int budget)
 	/* For the case where the last mvneta_poll did not process all
 	 * RX packets
 	 */
+	rx_queue = fls(((cause_rx_tx >> 8) & 0xff));
+
 	cause_rx_tx |= port->cause_rx_tx;
 
-	rx_queue = fls(((cause_rx_tx >> 8) & 0xff));
 	if (rx_queue) {
 		rx_queue = rx_queue - 1;
 		if (pp->bm_priv)
@@ -3115,6 +3116,7 @@ static int mvneta_change_mtu(struct net_device *dev, int mtu)
 
 	on_each_cpu(mvneta_percpu_enable, pp, true);
 	mvneta_start_dev(pp);
+	mvneta_port_up(pp);
 
 	netdev_update_features(dev);
 
@@ -4160,7 +4162,7 @@ static int mvneta_probe(struct platform_device *pdev)
 	err = register_netdev(dev);
 	if (err < 0) {
 		dev_err(&pdev->dev, "failed to register\n");
-		goto err_netdev;
+		goto err_free_stats;
 	}
 
 	netdev_info(dev, "Using %s mac address %pM\n", mac_from,
@@ -4179,11 +4181,13 @@ static int mvneta_probe(struct platform_device *pdev)
 	return 0;
 
 err_netdev:
+	unregister_netdev(dev);
 	if (pp->bm_priv) {
 		mvneta_bm_pool_destroy(pp->bm_priv, pp->pool_long, 1 << pp->id);
 		mvneta_bm_pool_destroy(pp->bm_priv, pp->pool_short,
 				       1 << pp->id);
 	}
+err_free_stats:
 	free_percpu(pp->stats);
 err_free_ports:
 	free_percpu(pp->ports);

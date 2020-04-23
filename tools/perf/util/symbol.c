@@ -217,8 +217,7 @@ void __map_groups__fixup_end(struct map_groups *mg, enum map_type type)
 		goto out_unlock;
 
 	for (next = map__next(curr); next; next = map__next(curr)) {
-		if (!curr->end)
-			curr->end = next->start;
+		curr->end = next->start;
 		curr = next;
 	}
 
@@ -226,8 +225,7 @@ void __map_groups__fixup_end(struct map_groups *mg, enum map_type type)
 	 * We still haven't the actual symbols, so guess the
 	 * last map final address.
 	 */
-	if (!curr->end)
-		curr->end = ~0ULL;
+	curr->end = ~0ULL;
 
 out_unlock:
 	pthread_rwlock_unlock(&maps->lock);
@@ -514,7 +512,7 @@ void dso__sort_by_name(struct dso *dso, enum map_type type)
 
 int modules__parse(const char *filename, void *arg,
 		   int (*process_module)(void *arg, const char *name,
-					 u64 start, u64 size))
+					 u64 start))
 {
 	char *line = NULL;
 	size_t n;
@@ -527,8 +525,8 @@ int modules__parse(const char *filename, void *arg,
 
 	while (1) {
 		char name[PATH_MAX];
-		u64 start, size;
-		char *sep, *endptr;
+		u64 start;
+		char *sep;
 		ssize_t line_len;
 
 		line_len = getline(&line, &n, file);
@@ -560,11 +558,7 @@ int modules__parse(const char *filename, void *arg,
 
 		scnprintf(name, sizeof(name), "[%s]", line);
 
-		size = strtoul(sep + 1, &endptr, 0);
-		if (*endptr != ' ' && *endptr != '\t')
-			continue;
-
-		err = process_module(arg, name, start, size);
+		err = process_module(arg, name, start);
 		if (err)
 			break;
 	}
@@ -911,8 +905,7 @@ static struct module_info *find_module(const char *name,
 	return NULL;
 }
 
-static int __read_proc_modules(void *arg, const char *name, u64 start,
-			       u64 size __maybe_unused)
+static int __read_proc_modules(void *arg, const char *name, u64 start)
 {
 	struct rb_root *modules = arg;
 	struct module_info *mi;

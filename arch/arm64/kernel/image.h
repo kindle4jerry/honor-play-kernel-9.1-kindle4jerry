@@ -73,11 +73,7 @@
 
 #ifdef CONFIG_EFI
 
-/*
- * Use ABSOLUTE() to avoid ld.lld treating this as a relative symbol:
- * https://github.com/ClangBuiltLinux/linux/issues/561
- */
-__efistub_stext_offset = ABSOLUTE(stext - _text);
+__efistub_stext_offset = stext - _text;
 
 /*
  * Prevent the symbol aliases below from being emitted into the kallsyms

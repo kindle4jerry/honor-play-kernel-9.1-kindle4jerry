@@ -109,8 +109,7 @@ static inline int verify_sec_ctx_len(struct nlattr **attrs)
 		return 0;
 
 	uctx = nla_data(rt);
-	if (uctx->len > nla_len(rt) ||
-	    uctx->len != (sizeof(struct xfrm_user_sec_ctx) + uctx->ctx_len))
+	if (uctx->len != (sizeof(struct xfrm_user_sec_ctx) + uctx->ctx_len))
 		return -EINVAL;
 
 	return 0;
@@ -156,31 +155,6 @@ static int verify_newsa_info(struct xfrm_usersa_info *p,
 
 	case AF_INET6:
 #if IS_ENABLED(CONFIG_IPV6)
-		break;
-#else
-		err = -EAFNOSUPPORT;
-		goto out;
-#endif
-
-	default:
-		goto out;
-	}
-
-	switch (p->sel.family) {
-	case AF_UNSPEC:
-		break;
-
-	case AF_INET:
-		if (p->sel.prefixlen_d > 32 || p->sel.prefixlen_s > 32)
-			goto out;
-
-		break;
-
-	case AF_INET6:
-#if IS_ENABLED(CONFIG_IPV6)
-		if (p->sel.prefixlen_d > 128 || p->sel.prefixlen_s > 128)
-			goto out;
-
 		break;
 #else
 		err = -EAFNOSUPPORT;
@@ -1366,7 +1340,7 @@ static int verify_newpolicy_info(struct xfrm_userpolicy_info *p)
 	ret = verify_policy_dir(p->dir);
 	if (ret)
 		return ret;
-	if (p->index && (xfrm_policy_id2dir(p->index) != p->dir))
+	if (p->index && ((p->index & XFRM_POLICY_MAX) != p->dir))
 		return -EINVAL;
 
 	return 0;
@@ -1450,8 +1424,20 @@ static int validate_tmpl(int nr, struct xfrm_user_tmpl *ut, u16 family)
 			return -EINVAL;
 		}
 
-		if (!xfrm_id_proto_valid(ut[i].id.proto))
+		switch (ut[i].id.proto) {
+		case IPPROTO_AH:
+		case IPPROTO_ESP:
+		case IPPROTO_COMP:
+#if IS_ENABLED(CONFIG_IPV6)
+		case IPPROTO_ROUTING:
+		case IPPROTO_DSTOPTS:
+#endif
+		case IPSEC_PROTO_ANY:
+			break;
+		default:
 			return -EINVAL;
+		}
+
 	}
 
 	return 0;
@@ -2173,9 +2159,6 @@ static int xfrm_add_acquire(struct sk_buff *skb, struct nlmsghdr *nlh,
 	xfrm_mark_get(attrs, &mark);
 
 	err = verify_newpolicy_info(&ua->policy);
-	if (err)
-		goto free_state;
-	err = verify_sec_ctx_len(attrs);
 	if (err)
 		goto free_state;
 

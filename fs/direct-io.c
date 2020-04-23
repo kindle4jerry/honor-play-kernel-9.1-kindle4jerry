@@ -638,7 +638,6 @@ static int get_more_blocks(struct dio *dio, struct dio_submit *sdio,
 	unsigned long fs_count;	/* Number of filesystem-sized blocks */
 	int create;
 	unsigned int i_blkbits = sdio->blkbits + sdio->blkfactor;
-	loff_t i_size;
 
 	/*
 	 * If there was a memory error and we've overwritten all the
@@ -668,8 +667,8 @@ static int get_more_blocks(struct dio *dio, struct dio_submit *sdio,
 		 */
 		create = dio->op == REQ_OP_WRITE;
 		if (dio->flags & DIO_SKIP_HOLES) {
-			i_size = i_size_read(dio->inode);
-			if (i_size && fs_startblk <= (i_size - 1) >> i_blkbits)
+			if (fs_startblk <= ((i_size_read(dio->inode) - 1) >>
+							i_blkbits))
 				create = 0;
 		}
 

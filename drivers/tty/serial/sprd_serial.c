@@ -36,7 +36,7 @@
 #define SPRD_FIFO_SIZE		128
 #define SPRD_DEF_RATE		26000000
 #define SPRD_BAUD_IO_LIMIT	3000000
-#define SPRD_TIMEOUT		256000
+#define SPRD_TIMEOUT		256
 
 /* the offset of serial registers and BITs for them */
 /* data registers */
@@ -63,7 +63,6 @@
 
 /* interrupt clear register */
 #define SPRD_ICLR		0x0014
-#define SPRD_ICLR_TIMEOUT	BIT(13)
 
 /* line control register */
 #define SPRD_LCR		0x0018
@@ -240,7 +239,7 @@ static inline void sprd_rx(struct uart_port *port)
 
 		if (lsr & (SPRD_LSR_BI | SPRD_LSR_PE |
 			SPRD_LSR_FE | SPRD_LSR_OE))
-			if (handle_lsr_errors(port, &flag, &lsr))
+			if (handle_lsr_errors(port, &lsr, &flag))
 				continue;
 		if (uart_handle_sysrq_char(port, ch))
 			continue;
@@ -299,8 +298,7 @@ static irqreturn_t sprd_handle_irq(int irq, void *dev_id)
 		return IRQ_NONE;
 	}
 
-	if (ims & SPRD_IMSR_TIMEOUT)
-		serial_out(port, SPRD_ICLR, SPRD_ICLR_TIMEOUT);
+	serial_out(port, SPRD_ICLR, ~0);
 
 	if (ims & (SPRD_IMSR_RX_FIFO_FULL |
 		SPRD_IMSR_BREAK_DETECT | SPRD_IMSR_TIMEOUT))

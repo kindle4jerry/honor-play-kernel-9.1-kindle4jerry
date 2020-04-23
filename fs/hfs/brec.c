@@ -74,10 +74,9 @@ int hfs_brec_insert(struct hfs_find_data *fd, void *entry, int entry_len)
 	if (!fd->bnode) {
 		if (!tree->root)
 			hfs_btree_inc_height(tree);
-		node = hfs_bnode_find(tree, tree->leaf_head);
-		if (IS_ERR(node))
-			return PTR_ERR(node);
-		fd->bnode = node;
+		fd->bnode = hfs_bnode_find(tree, tree->leaf_head);
+		if (IS_ERR(fd->bnode))
+			return PTR_ERR(fd->bnode);
 		fd->record = -1;
 	}
 	new_node = NULL;
@@ -440,7 +439,6 @@ skip:
 			/* restore search_key */
 			hfs_bnode_read_key(node, fd->search_key, 14);
 		}
-		new_node = NULL;
 	}
 
 	if (!rec && node->parent)

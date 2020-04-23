@@ -173,8 +173,7 @@ static void hw_tcp_check_and_disable_timestamps(void);
 #define REXMIT_LOST	1 /* retransmit packets marked lost */
 #define REXMIT_NEW	2 /* FRTO-style transmit of unsent/new packets */
 
-static void tcp_gro_dev_warn(struct sock *sk, const struct sk_buff *skb,
-			     unsigned int len)
+static void tcp_gro_dev_warn(struct sock *sk, const struct sk_buff *skb)
 {
 	static bool __once __read_mostly;
 
@@ -185,9 +184,8 @@ static void tcp_gro_dev_warn(struct sock *sk, const struct sk_buff *skb,
 
 		rcu_read_lock();
 		dev = dev_get_by_index_rcu(sock_net(sk), skb->skb_iif);
-		if (!dev || len >= dev->mtu)
-			pr_warn("%s: Driver has suspect GRO implementation, TCP performance may be compromised.\n",
-				dev ? dev->name : "Unknown driver");
+		pr_warn("%s: Driver has suspect GRO implementation, TCP performance may be compromised.\n",
+			dev ? dev->name : "Unknown driver");
 		rcu_read_unlock();
 	}
 }
@@ -210,10 +208,8 @@ static void tcp_measure_rcv_mss(struct sock *sk, const struct sk_buff *skb)
 	if (len >= icsk->icsk_ack.rcv_mss) {
 		icsk->icsk_ack.rcv_mss = min_t(unsigned int, len,
 					       tcp_sk(sk)->advmss);
-		/* Account for possibly-removed options */
-		if (unlikely(len > icsk->icsk_ack.rcv_mss +
-				   MAX_TCP_OPTION_SPACE))
-			tcp_gro_dev_warn(sk, skb, len);
+		if (unlikely(icsk->icsk_ack.rcv_mss != len))
+			tcp_gro_dev_warn(sk, skb);
 	} else {
 		/* Otherwise, we make more careful check taking into account,
 		 * that SACKs block is variable.
@@ -293,7 +289,7 @@ static void tcp_ecn_accept_cwr(struct tcp_sock *tp, const struct sk_buff *skb)
 
 static void tcp_ecn_withdraw_cwr(struct tcp_sock *tp)
 {
-	tp->ecn_flags &= ~TCP_ECN_QUEUE_CWR;
+	tp->ecn_flags &= ~TCP_ECN_DEMAND_CWR;
 }
 
 static void __tcp_ecn_check_ce(struct tcp_sock *tp, const struct sk_buff *skb)
@@ -455,9 +451,6 @@ static int __tcp_grow_window(const struct sock *sk, const struct sk_buff *skb)
 static void tcp_grow_window(struct sock *sk, const struct sk_buff *skb)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
-	int room;
-
-	room = min_t(int, tp->window_clamp, tcp_space(sk)) - tp->rcv_ssthresh;
 #ifdef CONFIG_MPTCP
 	struct sock *meta_sk = mptcp(tp) ? mptcp_meta_sk(sk) : sk;
 	struct tcp_sock *meta_tp = tcp_sk(meta_sk);
@@ -488,7 +481,9 @@ static void tcp_grow_window(struct sock *sk, const struct sk_buff *skb)
 	}
 #else
 	/* Check #1 */
-	if (room > 0 && !tcp_under_memory_pressure(sk)) {
+	if (tp->rcv_ssthresh < tp->window_clamp &&
+	    (int)tp->rcv_ssthresh < tcp_space(sk) &&
+	    !tcp_under_memory_pressure(sk)) {
 		int incr;
 
 		/* Check #2. Increase window, if skb with such overhead
@@ -501,7 +496,8 @@ static void tcp_grow_window(struct sock *sk, const struct sk_buff *skb)
 
 		if (incr) {
 			incr = max_t(int, incr, 2 * skb->len);
-			tp->rcv_ssthresh += min(room, incr);
+			tp->rcv_ssthresh = min(tp->rcv_ssthresh + incr,
+					       tp->window_clamp);
 			inet_csk(sk)->icsk_ack.quick |= 1;
 		}
 	}
@@ -1106,10 +1102,9 @@ static void tcp_update_reordering(struct sock *sk, const int metric,
 /* This must be called before lost_out is incremented */
 static void tcp_verify_retransmit_hint(struct tcp_sock *tp, struct sk_buff *skb)
 {
-	if ((!tp->retransmit_skb_hint && tp->retrans_out >= tp->lost_out) ||
-	    (tp->retransmit_skb_hint &&
-	     before(TCP_SKB_CB(skb)->seq,
-		    TCP_SKB_CB(tp->retransmit_skb_hint)->seq)))
+	if (!tp->retransmit_skb_hint ||
+	    before(TCP_SKB_CB(skb)->seq,
+		   TCP_SKB_CB(tp->retransmit_skb_hint)->seq))
 		tp->retransmit_skb_hint = skb;
 
 	if (!tp->lost_out ||
@@ -1937,11 +1932,8 @@ tcp_sacktag_write_queue(struct sock *sk, const struct sk_buff *ack_skb,
 		}
 
 		/* Ignore very old stuff early */
-		if (!after(sp[used_sacks].end_seq, prior_snd_una)) {
-			if (i == 0)
-				first_sack_index = -1;
+		if (!after(sp[used_sacks].end_seq, prior_snd_una))
 			continue;
-		}
 
 		used_sacks++;
 	}
@@ -3061,9 +3053,9 @@ static void tcp_fastretrans_alert(struct sock *sk, const int acked,
 	bool do_lost = is_dupack || ((flag & FLAG_DATA_SACKED) &&
 				    (tcp_fackets_out(tp) > tp->reordering));
 
-	if (!tp->packets_out && tp->sacked_out)
+	if (WARN_ON(!tp->packets_out && tp->sacked_out))
 		tp->sacked_out = 0;
-	if (!tp->sacked_out && tp->fackets_out)
+	if (WARN_ON(!tp->sacked_out && tp->fackets_out))
 		tp->fackets_out = 0;
 
 	/* Now state machine starts.
@@ -7249,21 +7241,9 @@ int tcp_conn_request(struct request_sock_ops *rsk_ops,
 				    &foc, TCP_SYNACK_FASTOPEN);
 		/* Add the child socket directly into the accept queue */
 #ifdef CONFIG_MPTCP
-		if (!inet_csk_reqsk_queue_add(sk, req, meta_sk)) {
-			reqsk_fastopen_remove(meta_sk, req, false);
-			bh_unlock_sock(meta_sk);
-			sock_put(meta_sk);
-			reqsk_put(req);
-			goto drop;
-		}
+		inet_csk_reqsk_queue_add(sk, req, meta_sk);
 #else
-		if (!inet_csk_reqsk_queue_add(sk, req, fastopen_sk)) {
-			reqsk_fastopen_remove(fastopen_sk, req, false);
-			bh_unlock_sock(fastopen_sk);
-			sock_put(fastopen_sk);
-			reqsk_put(req);
-			goto drop;
-		}
+		inet_csk_reqsk_queue_add(sk, req, fastopen_sk);
 #endif
 		sk->sk_data_ready(sk);
 		bh_unlock_sock(fastopen_sk);

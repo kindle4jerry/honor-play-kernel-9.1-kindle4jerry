@@ -136,10 +136,6 @@ static void nvmet_rdma_recv_done(struct ib_cq *cq, struct ib_wc *wc);
 static void nvmet_rdma_read_data_done(struct ib_cq *cq, struct ib_wc *wc);
 static void nvmet_rdma_qp_event(struct ib_event *event, void *priv);
 static void nvmet_rdma_queue_disconnect(struct nvmet_rdma_queue *queue);
-static void nvmet_rdma_free_rsp(struct nvmet_rdma_device *ndev,
-				struct nvmet_rdma_rsp *r);
-static int nvmet_rdma_alloc_rsp(struct nvmet_rdma_device *ndev,
-				struct nvmet_rdma_rsp *r);
 
 static struct nvmet_fabrics_ops nvmet_rdma_ops;
 
@@ -173,16 +169,8 @@ nvmet_rdma_get_rsp(struct nvmet_rdma_queue *queue)
 	spin_lock_irqsave(&queue->rsps_lock, flags);
 	rsp = list_first_entry(&queue->free_rsps,
 				struct nvmet_rdma_rsp, free_list);
-	if (likely(rsp))
-		list_del(&rsp->free_list);
+	list_del(&rsp->free_list);
 	spin_unlock_irqrestore(&queue->rsps_lock, flags);
-
-	if (unlikely(!rsp)) {
-		rsp = kmalloc(sizeof(*rsp), GFP_KERNEL);
-		if (unlikely(!rsp))
-			return NULL;
-		rsp->allocated = true;
-	}
 
 	return rsp;
 }
@@ -191,12 +179,6 @@ static inline void
 nvmet_rdma_put_rsp(struct nvmet_rdma_rsp *rsp)
 {
 	unsigned long flags;
-
-	if (unlikely(rsp->allocated)) {
-		nvmet_rdma_free_rsp(rsp->queue->dev, rsp);
-		kfree(rsp);
-		return;
-	}
 
 	spin_lock_irqsave(&rsp->queue->rsps_lock, flags);
 	list_add_tail(&rsp->free_list, &rsp->queue->free_rsps);

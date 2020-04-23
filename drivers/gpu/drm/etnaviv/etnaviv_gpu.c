@@ -1313,7 +1313,7 @@ int etnaviv_gpu_submit(struct etnaviv_gpu *gpu,
 	gpu->active_fence = submit->fence;
 
 	if (gpu->lastctx != cmdbuf->ctx) {
-		gpu->mmu->flush_seq++;
+		gpu->mmu->need_flush = true;
 		gpu->switch_context = true;
 		gpu->lastctx = cmdbuf->ctx;
 	}

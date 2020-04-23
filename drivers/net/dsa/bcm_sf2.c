@@ -405,10 +405,11 @@ static int bcm_sf2_sw_mdio_write(struct mii_bus *bus, int addr, int regnum,
 	 * send them to our master MDIO bus controller
 	 */
 	if (addr == BRCM_PSEUDO_PHY_ADDR && priv->indir_phy_mask & BIT(addr))
-		return bcm_sf2_sw_indir_rw(priv, 0, addr, regnum, val);
+		bcm_sf2_sw_indir_rw(priv, 0, addr, regnum, val);
 	else
-		return mdiobus_write_nested(priv->master_mii_bus, addr,
-				regnum, val);
+		mdiobus_write_nested(priv->master_mii_bus, addr, regnum, val);
+
+	return 0;
 }
 
 static irqreturn_t bcm_sf2_switch_0_isr(int irq, void *dev_id)
@@ -982,7 +983,6 @@ static int bcm_sf2_sw_probe(struct platform_device *pdev)
 	struct device_node *dn = pdev->dev.of_node;
 	struct b53_platform_data *pdata;
 	struct dsa_switch_ops *ops;
-	struct device_node *ports;
 	struct bcm_sf2_priv *priv;
 	struct b53_device *dev;
 	struct dsa_switch *ds;
@@ -1045,11 +1045,7 @@ static int bcm_sf2_sw_probe(struct platform_device *pdev)
 	spin_lock_init(&priv->indir_lock);
 	mutex_init(&priv->stats_mutex);
 
-	ports = of_find_node_by_name(dn, "ports");
-	if (ports) {
-		bcm_sf2_identify_ports(priv, ports);
-		of_node_put(ports);
-	}
+	bcm_sf2_identify_ports(priv, dn->child);
 
 	priv->irq0 = irq_of_parse_and_map(dn, 0);
 	priv->irq1 = irq_of_parse_and_map(dn, 1);

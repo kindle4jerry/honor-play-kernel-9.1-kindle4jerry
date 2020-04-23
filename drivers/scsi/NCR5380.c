@@ -617,14 +617,15 @@ static void complete_cmd(struct Scsi_Host *instance,
 
 	if (hostdata->sensing == cmd) {
 		/* Autosense processing ends here */
-		if (status_byte(cmd->result) != GOOD) {
+		if ((cmd->result & 0xff) != SAM_STAT_GOOD) {
 			scsi_eh_restore_cmnd(cmd, &hostdata->ses);
-		} else {
+			set_host_byte(cmd, DID_ERROR);
+		} else
 			scsi_eh_restore_cmnd(cmd, &hostdata->ses);
-			set_driver_byte(cmd, DRIVER_SENSE);
-		}
 		hostdata->sensing = NULL;
 	}
+
+	hostdata->busy[scmd_id(cmd)] &= ~(1 << cmd->device->lun);
 
 	cmd->scsi_done(cmd);
 }
@@ -812,8 +813,6 @@ static void NCR5380_main(struct work_struct *work)
 			NCR5380_information_transfer(instance);
 			done = 0;
 		}
-		if (!hostdata->connected)
-			NCR5380_write(SELECT_ENABLE_REG, hostdata->id_mask);
 		spin_unlock_irq(&hostdata->lock);
 		if (!done)
 			cond_resched();
@@ -1087,7 +1086,7 @@ static struct scsi_cmnd *NCR5380_select(struct Scsi_Host *instance,
 	if (!hostdata->selecting) {
 		/* Command was aborted */
 		NCR5380_write(MODE_REG, MR_BASE);
-		return NULL;
+		goto out;
 	}
 	if (err < 0) {
 		NCR5380_write(MODE_REG, MR_BASE);
@@ -1136,7 +1135,7 @@ static struct scsi_cmnd *NCR5380_select(struct Scsi_Host *instance,
 	if (!hostdata->selecting) {
 		NCR5380_write(MODE_REG, MR_BASE);
 		NCR5380_write(INITIATOR_COMMAND_REG, ICR_BASE);
-		return NULL;
+		goto out;
 	}
 
 	dsprintk(NDEBUG_ARBITRATION, instance, "won arbitration\n");
@@ -1209,6 +1208,8 @@ static struct scsi_cmnd *NCR5380_select(struct Scsi_Host *instance,
 		spin_lock_irq(&hostdata->lock);
 		NCR5380_write(INITIATOR_COMMAND_REG, ICR_BASE);
 		NCR5380_reselect(instance);
+		if (!hostdata->connected)
+			NCR5380_write(SELECT_ENABLE_REG, hostdata->id_mask);
 		shost_printk(KERN_ERR, instance, "reselection after won arbitration?\n");
 		goto out;
 	}
@@ -1216,16 +1217,14 @@ static struct scsi_cmnd *NCR5380_select(struct Scsi_Host *instance,
 	if (err < 0) {
 		spin_lock_irq(&hostdata->lock);
 		NCR5380_write(INITIATOR_COMMAND_REG, ICR_BASE);
-
+		NCR5380_write(SELECT_ENABLE_REG, hostdata->id_mask);
 		/* Can't touch cmd if it has been reclaimed by the scsi ML */
-		if (!hostdata->selecting)
-			return NULL;
-
-		cmd->result = DID_BAD_TARGET << 16;
-		complete_cmd(instance, cmd);
-		dsprintk(NDEBUG_SELECTION, instance,
-			"target did not respond within 250ms\n");
-		cmd = NULL;
+		if (hostdata->selecting) {
+			cmd->result = DID_BAD_TARGET << 16;
+			complete_cmd(instance, cmd);
+			dsprintk(NDEBUG_SELECTION, instance, "target did not respond within 250ms\n");
+			cmd = NULL;
+		}
 		goto out;
 	}
 
@@ -1253,11 +1252,12 @@ static struct scsi_cmnd *NCR5380_select(struct Scsi_Host *instance,
 	if (err < 0) {
 		shost_printk(KERN_ERR, instance, "select: REQ timeout\n");
 		NCR5380_write(INITIATOR_COMMAND_REG, ICR_BASE);
+		NCR5380_write(SELECT_ENABLE_REG, hostdata->id_mask);
 		goto out;
 	}
 	if (!hostdata->selecting) {
 		do_abort(instance);
-		return NULL;
+		goto out;
 	}
 
 	dsprintk(NDEBUG_SELECTION, instance, "target %d selected, going into MESSAGE OUT phase.\n",
@@ -1797,7 +1797,6 @@ static void NCR5380_information_transfer(struct Scsi_Host *instance)
 				cmd->result = DID_ERROR << 16;
 				complete_cmd(instance, cmd);
 				hostdata->connected = NULL;
-				hostdata->busy[scmd_id(cmd)] &= ~(1 << cmd->device->lun);
 				return;
 #endif
 			case PHASE_DATAIN:
@@ -1880,7 +1879,6 @@ static void NCR5380_information_transfer(struct Scsi_Host *instance)
 					         cmd, scmd_id(cmd), cmd->device->lun);
 
 					hostdata->connected = NULL;
-					hostdata->busy[scmd_id(cmd)] &= ~(1 << cmd->device->lun);
 
 					cmd->result &= ~0xffff;
 					cmd->result |= cmd->SCp.Status;
@@ -1904,6 +1902,9 @@ static void NCR5380_information_transfer(struct Scsi_Host *instance)
 					 * arbitration can resume.
 					 */
 					NCR5380_write(TARGET_COMMAND_REG, 0);
+
+					/* Enable reselect interrupts */
+					NCR5380_write(SELECT_ENABLE_REG, hostdata->id_mask);
 
 					maybe_release_dma_irq(instance);
 					return;
@@ -1936,6 +1937,8 @@ static void NCR5380_information_transfer(struct Scsi_Host *instance)
 					 */
 					NCR5380_write(TARGET_COMMAND_REG, 0);
 
+					/* Enable reselect interrupts */
+					NCR5380_write(SELECT_ENABLE_REG, hostdata->id_mask);
 #ifdef SUN3_SCSI_VME
 					dregs->csr |= CSR_DMA_ENABLE;
 #endif
@@ -2040,10 +2043,10 @@ static void NCR5380_information_transfer(struct Scsi_Host *instance)
 				NCR5380_transfer_pio(instance, &phase, &len, &data);
 				if (msgout == ABORT) {
 					hostdata->connected = NULL;
-					hostdata->busy[scmd_id(cmd)] &= ~(1 << cmd->device->lun);
 					cmd->result = DID_ERROR << 16;
 					complete_cmd(instance, cmd);
 					maybe_release_dma_irq(instance);
+					NCR5380_write(SELECT_ENABLE_REG, hostdata->id_mask);
 					return;
 				}
 				msgout = NOP;
@@ -2103,11 +2106,8 @@ static void NCR5380_reselect(struct Scsi_Host *instance)
 	NCR5380_write(MODE_REG, MR_BASE);
 
 	target_mask = NCR5380_read(CURRENT_SCSI_DATA_REG) & ~(hostdata->id_mask);
-	if (!target_mask || target_mask & (target_mask - 1)) {
-		shost_printk(KERN_WARNING, instance,
-			     "reselect: bad target_mask 0x%02x\n", target_mask);
-		return;
-	}
+
+	dsprintk(NDEBUG_RESELECTION, instance, "reselect\n");
 
 	/*
 	 * At this point, we have detected that our SCSI ID is on the bus,
@@ -2121,7 +2121,6 @@ static void NCR5380_reselect(struct Scsi_Host *instance)
 	NCR5380_write(INITIATOR_COMMAND_REG, ICR_BASE | ICR_ASSERT_BSY);
 	if (NCR5380_poll_politely(instance,
 	                          STATUS_REG, SR_SEL, 0, 2 * HZ) < 0) {
-		shost_printk(KERN_ERR, instance, "reselect: !SEL timeout\n");
 		NCR5380_write(INITIATOR_COMMAND_REG, ICR_BASE);
 		return;
 	}
@@ -2133,10 +2132,6 @@ static void NCR5380_reselect(struct Scsi_Host *instance)
 
 	if (NCR5380_poll_politely(instance,
 	                          STATUS_REG, SR_REQ, SR_REQ, 2 * HZ) < 0) {
-		if ((NCR5380_read(STATUS_REG) & (SR_BSY | SR_SEL)) == 0)
-			/* BUS FREE phase */
-			return;
-		shost_printk(KERN_ERR, instance, "reselect: REQ timeout\n");
 		do_abort(instance);
 		return;
 	}
@@ -2198,16 +2193,13 @@ static void NCR5380_reselect(struct Scsi_Host *instance)
 		dsprintk(NDEBUG_RESELECTION | NDEBUG_QUEUES, instance,
 		         "reselect: removed %p from disconnected queue\n", tmp);
 	} else {
-		int target = ffs(target_mask) - 1;
-
 		shost_printk(KERN_ERR, instance, "target bitmask 0x%02x lun %d not in disconnected queue.\n",
 		             target_mask, lun);
 		/*
 		 * Since we have an established nexus that we can't do anything
 		 * with, we must abort it.
 		 */
-		if (do_abort(instance) == 0)
-			hostdata->busy[target] &= ~(1 << lun);
+		do_abort(instance);
 		return;
 	}
 
@@ -2369,16 +2361,15 @@ static int NCR5380_abort(struct scsi_cmnd *cmd)
 	if (list_del_cmd(&hostdata->autosense, cmd)) {
 		dsprintk(NDEBUG_ABORT, instance,
 		         "abort: removed %p from sense queue\n", cmd);
+		set_host_byte(cmd, DID_ERROR);
 		complete_cmd(instance, cmd);
 	}
 
 out:
 	if (result == FAILED)
 		dsprintk(NDEBUG_ABORT, instance, "abort: failed to abort %p\n", cmd);
-	else {
-		hostdata->busy[scmd_id(cmd)] &= ~(1 << cmd->device->lun);
+	else
 		dsprintk(NDEBUG_ABORT, instance, "abort: successfully aborted %p\n", cmd);
-	}
 
 	queue_work(hostdata->work_q, &hostdata->main_task);
 	maybe_release_dma_irq(instance);
@@ -2406,7 +2397,7 @@ static int NCR5380_bus_reset(struct scsi_cmnd *cmd)
 	spin_lock_irqsave(&hostdata->lock, flags);
 
 #if (NDEBUG & NDEBUG_ANY)
-	shost_printk(KERN_INFO, instance, __func__);
+	scmd_printk(KERN_INFO, cmd, __func__);
 #endif
 	NCR5380_dprint(NDEBUG_ANY, instance);
 	NCR5380_dprint_phase(NDEBUG_ANY, instance);
@@ -2424,13 +2415,10 @@ static int NCR5380_bus_reset(struct scsi_cmnd *cmd)
 	 * commands!
 	 */
 
-	list_for_each_entry(ncmd, &hostdata->unissued, list) {
-		struct scsi_cmnd *cmd = NCR5380_to_scmd(ncmd);
-
+	if (list_del_cmd(&hostdata->unissued, cmd)) {
 		cmd->result = DID_RESET << 16;
 		cmd->scsi_done(cmd);
 	}
-	INIT_LIST_HEAD(&hostdata->unissued);
 
 	if (hostdata->selecting) {
 		hostdata->selecting->result = DID_RESET << 16;
@@ -2449,6 +2437,7 @@ static int NCR5380_bus_reset(struct scsi_cmnd *cmd)
 	list_for_each_entry(ncmd, &hostdata->autosense, list) {
 		struct scsi_cmnd *cmd = NCR5380_to_scmd(ncmd);
 
+		set_host_byte(cmd, DID_RESET);
 		cmd->scsi_done(cmd);
 	}
 	INIT_LIST_HEAD(&hostdata->autosense);

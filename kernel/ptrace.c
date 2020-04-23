@@ -74,7 +74,9 @@ void __ptrace_link(struct task_struct *child, struct task_struct *new_parent,
  */
 static void ptrace_link(struct task_struct *child, struct task_struct *new_parent)
 {
-	__ptrace_link(child, new_parent, current_cred());
+	rcu_read_lock();
+	__ptrace_link(child, new_parent, __task_cred(new_parent));
+	rcu_read_unlock();
 }
 
 /**
@@ -319,16 +321,6 @@ static int __ptrace_may_access(struct task_struct *task, unsigned int mode)
 	return -EPERM;
 ok:
 	rcu_read_unlock();
-	/*
-	 * If a task drops privileges and becomes nondumpable (through a syscall
-	 * like setresuid()) while we are trying to access it, we must ensure
-	 * that the dumpability is read after the credentials; otherwise,
-	 * we may be able to attach to a task that we shouldn't be able to
-	 * attach to (as if the task had dropped privileges without becoming
-	 * nondumpable).
-	 * Pairs with a write barrier in commit_creds().
-	 */
-	smp_rmb();
 	mm = task->mm;
 	if (mm &&
 	    ((get_dumpable(mm) != SUID_DUMP_USER) &&
@@ -710,10 +702,6 @@ static int ptrace_peek_siginfo(struct task_struct *child,
 	if (arg.nr < 0)
 		return -EINVAL;
 
-	/* Ensure arg.off fits in an unsigned long */
-	if (arg.off > ULONG_MAX)
-		return 0;
-
 	if (arg.flags & PTRACE_PEEKSIGINFO_SHARED)
 		pending = &child->signal->shared_pending;
 	else
@@ -721,20 +709,18 @@ static int ptrace_peek_siginfo(struct task_struct *child,
 
 	for (i = 0; i < arg.nr; ) {
 		siginfo_t info;
-		unsigned long off = arg.off + i;
-		bool found = false;
+		s32 off = arg.off + i;
 
 		spin_lock_irq(&child->sighand->siglock);
 		list_for_each_entry(q, &pending->list, list) {
 			if (!off--) {
-				found = true;
 				copy_siginfo(&info, &q->info);
 				break;
 			}
 		}
 		spin_unlock_irq(&child->sighand->siglock);
 
-		if (!found) /* beyond the end of the list */
+		if (off >= 0) /* beyond the end of the list */
 			break;
 
 #ifdef CONFIG_COMPAT

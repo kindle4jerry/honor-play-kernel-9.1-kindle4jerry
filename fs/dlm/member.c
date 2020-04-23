@@ -683,7 +683,7 @@ int dlm_ls_start(struct dlm_ls *ls)
 
 	error = dlm_config_nodes(ls->ls_name, &nodes, &count);
 	if (error < 0)
-		goto fail_rv;
+		goto fail;
 
 	spin_lock(&ls->ls_recover_lock);
 
@@ -715,9 +715,8 @@ int dlm_ls_start(struct dlm_ls *ls)
 	return 0;
 
  fail:
-	kfree(nodes);
- fail_rv:
 	kfree(rv);
+	kfree(nodes);
 	return error;
 }
 
