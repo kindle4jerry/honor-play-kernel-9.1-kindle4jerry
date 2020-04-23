@@ -58,7 +58,7 @@
 
 #define IMX2_WDT_WMCR		0x08		/* Misc Register */
 
-#define IMX2_WDT_MAX_TIME	128
+#define IMX2_WDT_MAX_TIME	128U
 #define IMX2_WDT_DEFAULT_TIME	60		/* in seconds */
 
 #define WDOG_SEC_TO_COUNT(s)	((s * 2 - 1) << 8)
@@ -172,12 +172,11 @@ static int imx2_wdt_ping(struct watchdog_device *wdog)
 static int imx2_wdt_set_timeout(struct watchdog_device *wdog,
 				unsigned int new_timeout)
 {
-	struct imx2_wdt_device *wdev = watchdog_get_drvdata(wdog);
+	unsigned int actual;
 
+	actual = min(new_timeout, IMX2_WDT_MAX_TIME);
+	__imx2_wdt_set_timeout(wdog, actual);
 	wdog->timeout = new_timeout;
-
-	regmap_update_bits(wdev->regmap, IMX2_WDT_WCR, IMX2_WDT_WCR_WT,
-			   WDOG_SEC_TO_COUNT(new_timeout));
 	return 0;
 }
 
