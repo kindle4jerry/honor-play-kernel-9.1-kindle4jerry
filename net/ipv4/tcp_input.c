@@ -7264,7 +7264,6 @@ int tcp_conn_request(struct request_sock_ops *rsk_ops,
 			goto drop;
 		}
 #endif
-		parent of aa4ddcd51... Edit tcp_input.c for patching
 		sk->sk_data_ready(sk);
 		bh_unlock_sock(fastopen_sk);
 #ifdef CONFIG_MPTCP
