@@ -3,6 +3,7 @@
 #include <linux/audit.h>
 #include <linux/types.h>
 #include <linux/slab.h>
+#include <linux/sched.h>
 #include <linux/workqueue.h>
 #include <linux/ctype.h>
 #include <linux/string.h>
@@ -12,7 +13,7 @@
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/hiview_selinux.h>
-#include <log/log_usertype.h>
+#include <log/log_usertype/log-usertype.h>
 
 #define PATH_LEN		128
 #define COMM_LEN 		64

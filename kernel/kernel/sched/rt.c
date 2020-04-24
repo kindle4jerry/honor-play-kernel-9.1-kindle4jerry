@@ -856,8 +856,6 @@ static int do_sched_rt_period_timer(struct rt_bandwidth *rt_b, int overrun)
 		struct rq *rq = rq_of_rt_rq(rt_rq);
 
 		raw_spin_lock(&rq->lock);
-		update_rq_clock(rq);
-
 		if (rt_rq->rt_time) {
 			u64 runtime;
 
@@ -1482,14 +1480,12 @@ select_task_rq_rt(struct task_struct *p, int cpu, int sd_flag, int flags)
 	 * will have to sort it out.
 	 */
 #ifdef CONFIG_HISI_CPU_ISOLATION
-	if (sysctl_sched_enable_rt_cas ||
-		cpu_isolated(cpu) ||
+	if (cpu_isolated(cpu) ||
 		(curr && unlikely(rt_task(curr)) &&
 		(tsk_nr_cpus_allowed(curr) < 2 ||
 		curr->prio <= p->prio))) {
 #else
-	if (sysctl_sched_enable_rt_cas ||
-		(curr && unlikely(rt_task(curr)) &&
+	if ((curr && unlikely(rt_task(curr)) &&
 		(tsk_nr_cpus_allowed(curr) < 2 ||
 		curr->prio <= p->prio))) {
 #endif
@@ -1815,10 +1811,8 @@ static int find_lowest_rq(struct task_struct *task)
 retry:
 		cpu = cpumask_first(&search_cpu);
 		do {
-#ifdef CONFIG_HISI_CPU_ISOLATION
 			if (cpu_isolated(cpu))
 				continue;
-#endif
 
 			if (walt_cpu_high_irqload(cpu))
 				continue;

@@ -3259,20 +3259,6 @@ unsigned long nr_running(void)
 	return sum;
 }
 
-#ifdef CONFIG_HISI_BIG_MAXFREQ_HOTPLUG
-/*lint -e40 -e64 -e507 -e530 -e713 -e737*/
-unsigned int cpu_nr_runnings(struct cpumask *mask)
-{
-	int i;
-	unsigned int sum = 0;
-
-	for_each_cpu(i, mask)
-		sum += cpu_rq(i)->nr_running;
-
-	return sum;
-}
-/*lint +e40 +e64 +e507 +e530 +e713 +e737*/
-#endif
 /*
  * Check if only the current task is running on the cpu.
  *

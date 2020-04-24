@@ -289,7 +289,7 @@ int sched_set_group_freq_update_interval(unsigned int grp_id, unsigned int inter
 		return -EINVAL;
 
 	grp = lookup_related_thread_group(grp_id);
-	if (!grp) {
+	if (!grp || !grp->preferred_cluster) {
 		pr_err("set update interval for group %d fail\n", grp_id);
 		return -ENODEV;
 	}
@@ -328,7 +328,7 @@ int sched_set_group_util_invalid_interval(unsigned int grp_id, unsigned int inte
 		return -EINVAL;
 
 	grp = lookup_related_thread_group(grp_id);
-	if (!grp) {
+	if (!grp || !grp->preferred_cluster) {
 		pr_err("set invalid interval for group %d fail\n", grp_id);
 		return -ENODEV;
 	}

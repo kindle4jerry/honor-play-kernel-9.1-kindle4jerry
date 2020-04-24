@@ -14,8 +14,7 @@
 #include <linux/kallsyms.h>
 #include <linux/utsname.h>
 #include <linux/mempolicy.h>
-//#include <log/log_usertype/log-usertype.h>
-#include <log/log_usertype.h>
+#include <log/log_usertype/log-usertype.h>
 
 #include <asm/barrier.h>
 #include <asm/stacktrace.h>

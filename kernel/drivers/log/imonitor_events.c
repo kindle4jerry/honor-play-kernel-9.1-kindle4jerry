@@ -1,11 +1,15 @@
-/*
- * Copyright (c) Huawei Technologies Co., Ltd. 2012-2018. All rights reserved.
+/**********************************************************
+ * Filename:	imonitor_events.c
  *
- * Description: drivers to generate imonitor event struct and convert it
- *              to regular string which can be analysed by imonitor engine
- *      Author: yaomanhai <yaomanhai@huawei.com>
- */
-
+ * Discription: Interfaces for generate imonitor event struct
+				and convert it to regular string which can be
+				analysed by imonitor engine
+ *
+ * Copyright: (C) 2016 huawei.
+ *
+ * Author: yaomanhai(00303692)
+ *
+**********************************************************/
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/types.h>
@@ -734,6 +738,7 @@ static int imonitor_write_log_exception(char *str, const int strlen)
 		if (nLeftBufLen <= EVENT_INFO_PACK_BUF_LEN) {
 			logbuf_to_exception(0, 0, IDAP_LOGTYPE_CMD, 0, strptr, nLeftBufLen);
 			sentcnt++;
+			nLeftBufLen = 0;
 			break;
 		} else {
 			tempchr = strptr[EVENT_INFO_PACK_BUF_LEN-1];

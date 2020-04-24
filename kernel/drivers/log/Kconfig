@@ -1,6 +1,8 @@
 #
 # Logger extend configuration
 #
+source "drivers/log/goldeneye/Kconfig"
+source "drivers/log/boot_log/Kconfig"
 
 menu "Logger extend configuration"
 
@@ -12,6 +14,14 @@ config LOGGER_EXTEND
 	  Enable support for logger extend
 
 if LOGGER_EXTEND
+
+config LOG_SWITCH
+	tristate "log switch feature support"
+	depends on HISI_NVE
+	default n
+	---help---
+	  Say Y here to enable log switch feature support. This allows
+	  user to control log.
 
 config LOG_EXCEPTION
 	bool "log exception feature support"
@@ -43,4 +53,3 @@ config HIVIEW_SELINUX
 	  Say Y here to enable log switch feature support. This allows
 	  user to collect selinux log to hiview.
 endmenu
-
