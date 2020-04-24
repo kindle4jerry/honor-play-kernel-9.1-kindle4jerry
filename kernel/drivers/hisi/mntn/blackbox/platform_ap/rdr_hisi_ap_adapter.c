@@ -1836,7 +1836,7 @@ void get_bbox_curtime_slice(void)
 
 void rdr_hisiap_reset(u32 modid, u32 etype, u64 coreid)
 {
-	u64 err1_status, err1_misc0;
+	//u64 err1_status, err1_misc0;
 	BB_PRINT_PN("%s start\n", __func__);
 	get_bbox_curtime_slice();
 	if (!in_atomic() && !irqs_disabled() && !in_irq()) {
@@ -1864,7 +1864,7 @@ void rdr_hisiap_reset(u32 modid, u32 etype, u64 coreid)
 	kmsg_dump(KMSG_DUMP_PANIC);
 	flush_cache_all();
 
-	l3cache_ecc_get_status(&err1_status, &err1_misc0, 1);
+	//l3cache_ecc_get_status(&err1_status, &err1_misc0, 1);
 	hisiap_nmi_notify_lpm3();
 	BB_PRINT_PN("%s end\n", __func__);
 
