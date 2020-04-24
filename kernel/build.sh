@@ -10,13 +10,13 @@
 
 export PATH=$PATH:/home/lumia/aarch64-linux-android-4.9-bakup/bin
 export CROSS_COMPILE=aarch64-linux-android-
-
+export GCC_COLOR=auto
 ##以下是官方文档给出的命令 看不懂可以不改
 # 到上一层开一个out文件夹
 mkdir ../out
 
 #照搬就好
-make ARCH=arm64 O=../out merge_kirin970_defconfig
+make ARCH=arm64 O=../out merge_kirin970_defconfig > /dev/null
 
 
 #这个-j的参数可以自己选择，据不可靠消息表明可以设置为cpu线程数的1-2倍
@@ -24,7 +24,7 @@ make ARCH=arm64 O=../out merge_kirin970_defconfig
 #pps我4c8t初次编译用的多少忘了，但是以后编译基本都是用的80那么多
 #ppps我个人推荐不要用cpu线程1-2倍(时间成本高)，我推荐初次编译在3-4倍左右，菊花这个内核make玄学的很，或许和常规的make -j的配置有所不同...自己把握把
 
-make ARCH=arm64 O=../out -j128
+make ARCH=arm64 O=../out -j128 > /dev/null
 
 #最终输出 Kernel 的位置: out/arch/arm64/boot/Image.gz
 #然后把Image.gz送去打包，位置/kernel/tool
