@@ -2312,7 +2312,7 @@ out_put_tag:
  * @index: LU number to access
  * @selector: query/flag/descriptor further identification
  */
-inline void ufshcd_init_query(struct ufs_hba *hba,
+void ufshcd_init_query(struct ufs_hba *hba,
 		struct ufs_query_req **request, struct ufs_query_res **response,
 		enum query_opcode opcode, u8 idn, u8 index, u8 selector)
 {/*lint !e695*/
