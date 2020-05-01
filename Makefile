@@ -302,14 +302,26 @@ CONFIG_SHELL := $(shell if [ -x "$$BASH" ]; then echo $$BASH; \
 	  else echo sh; fi ; fi)
 
 ifeq ($(strip $(clang)), true)
-CLANG_CROSS_COMPILE_PRE:=$(srctree)/../../prebuilts/clang/host/linux-x86/clang-4679922/bin/
+CLANG_PREBUILTS_PATH ?= /home/lumia/linux-x86-clang-aosp9/
+CLANG_PREBUILT_BIN := $(CLANG_PREBUILTS_PATH)bin/
+CLANG_CROSS_COMPILE_PRE:=/home/lumia/linux-x86-clang-aosp9/bin/
+
+HOST_LFS_CFLAGS := $(shell getconf LFS_CFLAGS 2>/dev/null)
+HOST_LFS_LDFLAGS := $(shell getconf LFS_LDFLAGS 2>/dev/null)
+HOST_LFS_LIBS := $(shell getconf LFS_LIBS 2>/dev/null)
 HOSTCC       = $(CLANG_CROSS_COMPILE_PRE)clang
+HOSTCXX	=g++
+HOSTCFLAGS   := -Wall -Wmissing-prototypes -Wstrict-prototypes -O2 \
+		-fomit-frame-pointer -std=gnu89 $(HOST_LFS_CFLAGS)
+HOSTCXXFLAGS := -O2 $(HOST_LFS_CFLAGS)
+HOSTLDFLAGS  := $(HOST_LFS_LDFLAGS)
+HOST_LOADLIBES := $(HOST_LFS_LIBS)
 else
 HOSTCC       = gcc
-endif
 HOSTCXX      = g++
-HOSTCFLAGS   := -Wall -Wmissing-prototypes -Wstrict-prototypes -O3 -fomit-frame-pointer -std=gnu89
-HOSTCXXFLAGS = -O3
+HOSTCFLAGS   := -Wall -Wmissing-prototypes -Wstrict-prototypes -O2 -fomit-frame-pointer -std=gnu89
+HOSTCXXFLAGS = -O2
+endif
 
 ifeq ($(shell $(HOSTCC) -v 2>&1 | grep -c "clang version"), 1)
 HOSTCFLAGS  += -Wno-unused-value -Wno-unused-parameter \
@@ -351,8 +363,14 @@ scripts/Kbuild.include: ;
 include scripts/Kbuild.include
 
 # Make variables (CC, etc...)
+ifeq ($(strip $(clang)), true)
+AS		= $(CROSS_COMPILE)as
+LD		= $(CROSS_COMPILE)ld
+else
 AS		= $(SOURCEANALYZER) $(CROSS_COMPILE)as
 LD		= $(SOURCEANALYZER) $(CROSS_COMPILE)ld
+endif
+
 ifeq (,$(strip $(KP_PATCH)))
 CCACHE		?= $(srctree)/../../prebuilts/misc/linux-x86/ccache/ccache
 endif
@@ -698,7 +716,7 @@ export CFLAGS_GCOV CFLAGS_KCOV
 # Make toolchain changes before including arch/$(SRCARCH)/Makefile to ensure
 # ar/cc/ld-* macros return correct values.
 ifdef CONFIG_LTO_CLANG
-CLANG_LIBS_PRE:=$(srctree)/../../prebuilts/clang/host/linux-x86/clang-4679922/lib64/
+CLANG_LIBS_PRE:=$(CLANG_PREBUILTS_PATH)/lib64/
 # use GNU gold with LLVMgold for LTO linking, and LD for vmlinux_link
 LDFINAL_vmlinux := $(LD)
 LD		:= $(LDGOLD)
@@ -750,7 +768,7 @@ export LDFINAL_vmlinux LDFLAGS_FINAL_vmlinux
 endif
 
 ifdef CONFIG_CFI_CLANG
-cfi-clang-flags	+= -fsanitize=cfi
+cfi-clang-flags	+= -fsanitize=cfi -fsanitize-recover=cfi -fno-sanitize-trap=cfi
 DISABLE_CFI_CLANG := -fno-sanitize=cfi
 ifdef CONFIG_MODULES
 cfi-clang-flags	+= -fsanitize-cfi-cross-dso
@@ -781,9 +799,9 @@ KBUILD_CFLAGS	+= $(call cc-option,-Oz,-Os)
 KBUILD_CFLAGS	+= $(call cc-disable-warning,maybe-uninitialized,)
 else
 ifdef CONFIG_PROFILE_ALL_BRANCHES
-KBUILD_CFLAGS	+= -O3 -mcpu=cortex-a73.cortex-a53 -mtune=cortex-a73.cortex-a53 $(call cc-disable-warning,maybe-uninitialized,)
+KBUILD_CFLAGS	+= -O2 $(call cc-disable-warning,maybe-uninitialized,)
 else
-KBUILD_CFLAGS   += -O3 -mcpu=cortex-a73.cortex-a53 -mtune=cortex-a73.cortex-a53
+KBUILD_CFLAGS   += -O2
 endif
 endif
 
@@ -815,7 +833,7 @@ KBUILD_CFLAGS += $(call cc-option,-Wframe-larger-than=${CONFIG_FRAME_WARN})
 endif
 
 ifeq ($(use_hash_log),true)
-KBUILD_CFLAGS += -fplugin=$(srctree)/../../prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/libexec/gcc/aarch64-linux-android/4.9.x/hashlog.so
+KBUILD_CFLAGS += -fplugin=/home/lumia/aarch64-linux-android-4.9-bakup/libexec/gcc/aarch64-linux-android/4.9.x/hashlog.so
 KBUILD_CFLAGS += -fplugin-arg-hashlog-keyconfdir=$(srctree)/../../vendor/hisi/ap/build/core/kernel_hash_key_config.txt
 ifeq ($(gen_loghash_file),true)
 KBUILD_CFLAGS += -fplugin-arg-hashlog-genkeyfile
@@ -824,7 +842,7 @@ endif
 
 #KBUILD_CFLAGS += -fplugin=$(srctree)/../../prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/libexec/gcc/aarch64-linux-android/4.9.x/cfi.so -fplugin-arg-cfi-logfault
 ifdef CONFIG_HUAWEI_CFI
-KBUILD_CFLAGS += -fplugin=$(srctree)/../../prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/libexec/gcc/aarch64-linux-android/4.9.x/cfi.so -fplugin-arg-cfi-abortfn=__cfi_report
+KBUILD_CFLAGS += -fplugin=/home/lumia/aarch64-linux-android-4.9-bakup/libexec/gcc/aarch64-linux-android/4.9.x/cfi.so -fplugin-arg-cfi-abortfn=__cfi_report
 KBUILD_CFLAGS += -fplugin-arg-cfi-tagvalue=$(CONFIG_HUAWEI_CFI_TAG)
 ifeq ($(CONFIG_HUAWEI_CFI_DEBUG),y)
 KBUILD_CFLAGS += -DHW_SAVE_CFI_LOG
@@ -835,7 +853,7 @@ ifdef CONFIG_GCC_PLUGIN_RANDSTRUCT
 ###!!!!!! only support 100 white list ,and etch item must less than 64 ,split by ,
 rand_struct_whitelist=/rand_struct_whitelist_do_nothing/
 #rand_struct_whitelist=/modem/,/hisi/,/connectivity/,/wifi/,drivers/spmi_hisi/,drivers/hwusb/,drivers/rphone/,drivers/media/,drivers/vcodec/
-KBUILD_CFLAGS += -fplugin=$(srctree)/../../prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/libexec/gcc/aarch64-linux-android/4.9.x/randomize_layout.so
+KBUILD_CFLAGS += -fplugin=/home/lumia/aarch64-linux-android-4.9-bakup/libexec/gcc/aarch64-linux-android/4.9.x/randomize_layout.so
 RANDSTRUCT_SEED_VALUE = $(shell cat $(srctree)/randomize_layout_seed)
 KBUILD_CFLAGS += -fplugin-arg-randomize_layout-seed=$(RANDSTRUCT_SEED_VALUE)
 KBUILD_CFLAGS += -fplugin-arg-randomize_layout-whitelist=$(rand_struct_whitelist)
@@ -855,7 +873,7 @@ endif
 endif
 
 ifdef CONFIG_GCC_PLUGIN_STRUCTLEAK
-KBUILD_CFLAGS += -fplugin=$(srctree)/../../prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/libexec/gcc/aarch64-linux-android/4.9.x/structleak.so
+KBUILD_CFLAGS += -fplugin=/home/lumia/aarch64-linux-android-4.9-bakup/libexec/gcc/aarch64-linux-android/4.9.x/structleak.so
 KBUILD_CFLAGS += -fplugin-arg-structleak-verbose
 ##byref-all means all struct should be forcibly initialized, default initialized struct copy to user
 ##KBUILD_CFLAGS += -fplugin-arg-structleak-byref-all
@@ -906,7 +924,7 @@ KBUILD_CFLAGS += $(call cc-disable-warning, tautological-compare)
 
 ifeq ($(strip $(clang)), true)
 KBUILD_CFLAGS += -Wno-error=return-type
-KBUILD_CFLAGS += -Wno-error=unknown-warning-option
+#KBUILD_CFLAGS += -Wno-error=unknown-warning-option
 endif
 
 # CLANG uses a _MergedGlobals as optimization, but this breaks modpost, as the
@@ -937,6 +955,24 @@ KBUILD_CFLAGS	+= -fomit-frame-pointer
 endif
 endif
 
+ifeq ($(strip $(clang)), true)
+KBUILD_CPPFLAGS += $(call cc-option,-Qunused-arguments,)
+KBUILD_CFLAGS += $(call cc-disable-warning, format-invalid-specifier)
+KBUILD_CFLAGS += $(call cc-disable-warning, gnu)
+KBUILD_CFLAGS += $(call cc-disable-warning, address-of-packed-member)
+KBUILD_CFLAGS += $(call cc-disable-warning, duplicate-decl-specifier)
+# Quiet clang warning: comparison of unsigned expression < 0 is always false
+KBUILD_CFLAGS += $(call cc-disable-warning, tautological-compare)
+KBUILD_CFLAGS += -Wno-error=typedef-redefinition
+KBUILD_CFLAGS += -Wno-error=return-type
+# CLANG uses a _MergedGlobals as optimization, but this breaks modpost, as the
+# source of a reference will be _MergedGlobals and not on of the whitelisted names.
+# See modpost pattern 2
+KBUILD_CFLAGS += $(call cc-option, -mno-global-merge,)
+KBUILD_CFLAGS += $(call cc-option, -fcatch-undefined-behavior)
+KBUILD_CFLAGS += $(call cc-option, -no-integrated-as)
+KBUILD_AFLAGS += $(call cc-option, -no-integrated-as)
+endif
 KBUILD_CFLAGS   += $(call cc-option, -fno-var-tracking-assignments)
 
 ifdef CONFIG_DEBUG_INFO
@@ -1177,8 +1213,11 @@ export LDFLAGS_vmlinux
 # used by scripts/pacmage/Makefile
 export KBUILD_ALLDIRS := $(sort $(filter-out arch/%,$(vmlinux-alldirs)) arch Documentation include samples scripts tools)
 
+ifneq ($(strip $(clang)), true)
+vmlinux-deps := $(KBUILD_LDS) $(KBUILD_VMLINUX_INIT) $(KBUILD_VMLINUX_MAIN) $(KBUILD_VMLINUX_LIBS)
+else
 vmlinux-deps := $(KBUILD_LDS) $(KBUILD_VMLINUX_INIT) $(KBUILD_VMLINUX_MAIN)
-
+endif
 # Include targets which we want to execute sequentially if the rest of the
 # kernel build went well. If CONFIG_TRIM_UNUSED_KSYMS is set, this might be
 # evaluated more than once.
