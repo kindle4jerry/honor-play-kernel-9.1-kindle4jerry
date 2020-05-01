@@ -654,7 +654,8 @@ static int tee_calc_task_hash(unsigned char *digest, bool cfc_rehash, struct tas
 	int rc;
 	struct {
 		struct shash_desc shash;
-		char ctx[crypto_shash_descsize(g_tee_shash_tfm)];
+        char *ctx;
+		//char ctx[crypto_shash_descsize(g_tee_shash_tfm)];
 	} desc;
 
 	if (NULL == digest) {
