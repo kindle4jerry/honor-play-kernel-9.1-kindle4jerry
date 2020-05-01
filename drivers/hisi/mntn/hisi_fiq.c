@@ -65,7 +65,7 @@ asmlinkage void fiq_dump(struct pt_regs *regs, unsigned int esr)
 	struct rdr_exception_info_s *p_exce_info;
 	char date[DATATIME_MAXLEN];
 	int ret = 0;
-	u64 err1_status, err1_misc0;
+	//u64 err1_status, err1_misc0;
 	unsigned int reset_reason;
 
 	fiq_dump_flag = 0xdeaddead;
@@ -127,7 +127,7 @@ asmlinkage void fiq_dump(struct pt_regs *regs, unsigned int esr)
 	rdr_hisiap_dump_root_head(MODID_AP_S_WDT, AP_S_AWDT, RDR_AP);
 	bbox_diaginfo_dump_lastmsg();
 	pr_crit("fiq_dump end\n");
-	l3cache_ecc_get_status(&err1_status, &err1_misc0, 1);
+	//l3cache_ecc_get_status(&err1_status, &err1_misc0, 1);
 	mntn_show_stack_cpustall();
 
 	kmsg_dump(KMSG_DUMP_PANIC);
