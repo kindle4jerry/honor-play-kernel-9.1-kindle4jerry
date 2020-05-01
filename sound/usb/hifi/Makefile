@@ -1,4 +1,8 @@
-subdir-ccflags-y += -Wall -Werror
+subdir-ccflags-y += -Wall -Werror 
+
+ifeq ($(clang),true)
+subdir-ccflags-y += -Wno-error=pointer-bool-conversion
+endif
 
 EXTRA_CFLAGS +=	-Isound/usb/
 ccflags-y += -Idrivers/devkit/audiokit/
